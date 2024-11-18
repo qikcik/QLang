@@ -11,11 +11,11 @@ std::ostream& operator<<(std::ostream& os, const LexToken::Source& in)
 std::ostream& operator<<(std::ostream& os, const LexToken::Any& in)
 {
     in |vx::match {
-        [&os,&in](const LexToken::Separator& v)   { os << "LexToken::Separator{" << v.value << "} at " << v.source; },
-        [&os,&in](const LexToken::Label& v)       { os << "LexToken::Label{" << v.value << "} at " << v.source; },
-        [&os,&in](const LexToken::String& v)      { os << "LexToken::String{" << v.value << "} at " << v.source; },
-        [&os,&in](const LexToken::Integer& v)     { os << "LexToken::Integer{" << v.value << "} at " << v.source; },
-        [&os,&in](const LexToken::Float& v)       { os << "LexToken::Float{" << v.value << "} at " << v.source; },
+        [&os,&in](const LexToken::Separator& v)   { os << "LexToken::Separator{" << v.content << "} at " << v.source; },
+        [&os,&in](const LexToken::Label& v)       { os << "LexToken::Label{" << v.content << "} at " << v.source; },
+        [&os,&in](const LexToken::String& v)      { os << "LexToken::String{" << v.content << "} at " << v.source; },
+        [&os,&in](const LexToken::Integer& v)     { os << "LexToken::Integer{" << v.content << "} at " << v.source; },
+        [&os,&in](const LexToken::Float& v)       { os << "LexToken::Float{" << v.content << "} at " << v.source; },
     };
 
     return os;

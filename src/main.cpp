@@ -15,7 +15,7 @@
 int main()
 {
 
-    LexScanner scanner("(2+2)*2","<embed>",{"+","-","*","/","(",")"});
+    LexScanner scanner("(2+-2)*2/4","<embed>",{"+","-","*","/","(",")"});
     while ( scanner.current())
     {
         std::cout << scanner.current() << "\n";

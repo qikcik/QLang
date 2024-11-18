@@ -3,59 +3,7 @@
 #include <memory>
 
 #include "LexScanner.hpp"
-
-struct AstNode
-{
-    virtual std::string stringify()
-    {
-        return "<AstNode>{}";
-    }
-};
-struct AstInteger : public AstNode
-{
-    explicit AstInteger(const int inValue) : value(inValue) {};
-    int value;
-
-    std::string stringify() override
-    {
-        return "<AstInteger>{"+std::to_string(value)+"}";
-    }
-};
-struct AstFloat : public AstNode
-{
-    explicit AstFloat(const float inValue) : value(inValue) {};
-    float value;
-
-    std::string stringify() override
-    {
-        return "<AstFloat>{"+std::to_string(value)+"}";
-    }
-};
-
-struct AstUnary : public AstNode
-{
-    AstUnary(std::string inUnaryOperator, std::unique_ptr<AstNode> inValue) : unaryOperator(std::move(inUnaryOperator)), value(std::move(inValue)) {};
-    std::string unaryOperator;
-    std::unique_ptr<AstNode> value;
-
-    std::string stringify() override
-    {
-        return "<AstUnary>{'"+unaryOperator+"',"+value->stringify()+"}";
-    }
-};
-
-struct AstMathOp : public AstNode
-{
-    AstMathOp(std::string inOperation, std::unique_ptr<AstNode> inLeft, std::unique_ptr<AstNode> inRight) : operation(std::move(inOperation)), left(std::move(inLeft)), right(std::move(inRight)) {};
-    std::string operation;
-    std::unique_ptr<AstNode> left;
-    std::unique_ptr<AstNode> right;
-
-    std::string stringify() override
-    {
-        return "<AstMathOp>{'"+operation+"',"+left->stringify()+","+right->stringify()+"}";
-    }
-};
+#include "AstNode.hpp"
 
 class AstParser
 {
@@ -63,19 +11,89 @@ public:
     explicit AstParser(LexScanner& inScanner) : scanner(inScanner) {};
 
     //<primary> ::= <integer> | <float> | '(' <expr> ')'
-    std::unique_ptr<AstNode> primary();
+    std::unique_ptr<AstNode> primary()
+    {
+        if(const auto v = scanner.current<LexToken::Integer>())
+        {
+            scanner.next();
+            return std::make_unique<AstInteger>( *v );
+        }
+        if(const auto v =scanner.current<LexToken::Float>())
+        {
+            scanner.next();
+            return std::make_unique<AstFloat>( *v );
+        }
+        if(scanner.currentMath<LexToken::Separator>("("))
+        {
+            scanner.next();
+            std::unique_ptr<AstNode> e = std::move(expr());
+            if(scanner.currentMath<LexToken::Separator>(")"))
+            {
+                scanner.next();
+            }
+            else
+            {
+                throw std::runtime_error("Unbalanced parentheses");
+            }
+
+            return e;
+        }
+        throw std::runtime_error("unexpected token");
+    }
 
     //<unary> ::= ('+'|'-'|'~') <unary> | <primary>
-    std::unique_ptr<AstNode> unary();
+    std::unique_ptr<AstNode> unary()
+    {
+        if(scanner.currentMath<LexToken::Separator>("~") || scanner.currentMath<LexToken::Separator>("+") || scanner.currentMath<LexToken::Separator>("-"))
+        {
+            auto op = *scanner.current<LexToken::Separator>();
+            scanner.next();
 
-    //<factor> ::= <unary>
-    std::unique_ptr<AstNode> factor();
+            auto inner = std::move(unary());
+            return std::make_unique<AstUnaryOp>( op, std::move(inner) );
+        }
+        return primary();
+    }
 
-    //<term> ::= <factor> ( ('*' | '/') <factor> )*
-    std::unique_ptr<AstNode> term();
+    //<multiplication> ::= <unary> ( ('+' | '-') <unary> )*
+    std::unique_ptr<AstNode> multiplication()
+    {
+        auto e = unary();
+        while (scanner.currentMath<LexToken::Separator>("*") || scanner.currentMath<LexToken::Separator>("/") )
+        {
 
-    //<expr> ::= <term> ( ('+' | '-') <term> )*
-    std::unique_ptr<AstNode> expr();
+            auto op = *scanner.current<LexToken::Separator>();
+            scanner.next();
+
+            auto right = std::move(unary());
+            e = std::make_unique<AstMathOp>(op, std::move(e), std::move(right));
+
+        }
+        return std::move(e);
+    }
+
+    //<addition> ::= <multiplication> ( ('+' | '-') <multiplication> )*
+    std::unique_ptr<AstNode> addition()
+    {
+        auto e = multiplication();
+
+        while (scanner.currentMath<LexToken::Separator>("+") || scanner.currentMath<LexToken::Separator>("-") )
+        {
+            auto op = *scanner.current<LexToken::Separator>();
+            scanner.next();
+
+            auto right = std::move(multiplication());
+            e = std::make_unique<AstMathOp>(op, std::move(e), std::move(right));
+
+        }
+        return std::move(e);
+    }
+
+    //<expr> ::= <addition>
+    std::unique_ptr<AstNode> expr()
+    {
+        return addition();
+    }
 
 protected:
     LexScanner& scanner;

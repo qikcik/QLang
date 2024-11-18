@@ -14,5 +14,3 @@ file(
 )
 
 add_executable(QLang ${sources})
-
-

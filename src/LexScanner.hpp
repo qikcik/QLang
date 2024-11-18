@@ -24,11 +24,11 @@ public:
     }
 
     template<typename T>
-    std::optional<T> currentMath(const typename T::ValueType& expected)
+    std::optional<T> currentMath(const typename T::TContentType& expected)
     {
         if(auto v = current<T>())
         {
-            if(v->value == expected)
+            if(v->content == expected)
                 return v;
         }
         return {};

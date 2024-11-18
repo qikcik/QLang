@@ -15,19 +15,19 @@ namespace  LexToken
     };
 
     template<typename T>
-    struct WithValueType
+    struct WithContent
     {
-        using ValueType = T;
+        using TContentType = T;
 
         Source source;
-        ValueType value {};
+        TContentType content {};
     };
 
-    struct Separator    final       : public WithValueType<std::string> {};
-    struct Label        final       : public WithValueType<std::string> {};
-    struct String       final       : public WithValueType<std::string> {};
-    struct Integer      final       : public WithValueType<int>         {};
-    struct Float        final       : public WithValueType<float>       {};
+    struct Separator    final       : public WithContent<std::string> {};
+    struct Label        final       : public WithContent<std::string> {};
+    struct String       final       : public WithContent<std::string> {};
+    struct Integer      final       : public WithContent<int>         {};
+    struct Float        final       : public WithContent<float>       {};
 
     using Any = std::variant<Separator,Label,String,Integer,Float>;
 };
