@@ -2,9 +2,14 @@
 #include <ostream>
 #include <vx.hpp>
 
+std::string LexToken::Source::stringify() const
+{
+    return fromSource + ":" + std::to_string(atLine) + ":" + std::to_string(startingCharacter);
+}
+
 std::ostream& operator<<(std::ostream& os, const LexToken::Source& in)
 {
-    os << in.fromSource << ":" << in.atLine << " at char " << in.startingCharacter;
+    os << in.stringify();
     return os;
 }
 

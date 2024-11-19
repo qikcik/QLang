@@ -15,10 +15,10 @@
 
 int main()
 {
+    std::string source = "2^3^2";
+    LexScanner scanner(source,"<embed>",{"+","-","*","^","/","(",")","==","!=","<",">","<=",">=","!"});
 
-    LexScanner scanner("(2+2)*2","<embed>",{"+","-","*","/","(",")"});
-
-    std::cout << "\n\nTOEKNS: \n";
+    std::cout << "\n\nTOKEKNS: \n";
     while ( scanner.current())
     {
         std::cout << scanner.current() << "\n";
@@ -32,7 +32,7 @@ int main()
 
     std::cout << "\n\nINTERPRET: \n";
 
-    std::cout << treeWallInterpret(root.get())->stringify();
+    std::cout << treeWallInterpret(root.get());
 
     return 0;
 }

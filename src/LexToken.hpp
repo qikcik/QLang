@@ -12,6 +12,8 @@ namespace  LexToken
         std::string fromSource {};
         size_t atLine {};
         size_t startingCharacter {};
+
+        std::string stringify() const;
     };
 
     template<typename T>

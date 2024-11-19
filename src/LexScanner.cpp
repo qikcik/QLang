@@ -51,7 +51,7 @@ std::optional<LexToken::Any> LexScanner::next()
         }
         else
         {
-            throw std::runtime_error( "unidentified token starting with:" + std::to_string(source[positionIdx]));
+            throw std::runtime_error( "unidentified token starting with:" + std::to_string(static_cast<char>(source[positionIdx])) + " at: "+ std::to_string(positionIdx));
             break;
         }
     }
@@ -81,7 +81,7 @@ bool LexScanner::tryTokenizeNumber()
             summed += charIt;
             positionIdx++;
         }
-        if(charIt=='.' and !containsDot)
+        else if(charIt=='.' and !containsDot)
         {
             containsDot = true;
             summed += charIt;

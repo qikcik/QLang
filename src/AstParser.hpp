@@ -10,7 +10,7 @@ class AstParser
 public:
     explicit AstParser(LexScanner& inScanner) : scanner(inScanner) {};
 
-    //<primary> ::= <integer> | <float> | '(' <expr> ')'
+    //<primary> ::= <integer> | <float> | <string> |  <bool> as ('true'|'false') | '(' <expr> ')'
     std::unique_ptr<AstNode> primary()
     {
         if(const auto v = scanner.current<LexToken::Integer>())
@@ -22,6 +22,17 @@ public:
         {
             scanner.next();
             return std::make_unique<AstFloat>( *v );
+        }
+        if(const auto v =scanner.current<LexToken::String>())
+        {
+            scanner.next();
+            return std::make_unique<AstString>( *v );
+        }
+        if(scanner.currentMath<LexToken::Label>("true") || scanner.currentMath<LexToken::Label>("false"))
+        {
+            const auto v = *scanner.current<LexToken::Label>();
+            scanner.next();
+            return std::make_unique<AstBool>( v );
         }
         if(scanner.currentMath<LexToken::Separator>("("))
         {
@@ -41,10 +52,10 @@ public:
         throw std::runtime_error("unexpected token");
     }
 
-    //<unary> ::= ('+'|'-'|'~') <unary> | <primary>
+    //<unary> ::= ('+'|'-'|'!') <unary> | <primary>
     std::unique_ptr<AstNode> unary()
     {
-        if(scanner.currentMath<LexToken::Separator>("~") || scanner.currentMath<LexToken::Separator>("+") || scanner.currentMath<LexToken::Separator>("-"))
+        if(scanner.currentMath<LexToken::Separator>("+") || scanner.currentMath<LexToken::Separator>("-") || scanner.currentMath<LexToken::Separator>("!"))
         {
             auto op = *scanner.current<LexToken::Separator>();
             scanner.next();
@@ -55,18 +66,35 @@ public:
         return primary();
     }
 
-    //<multiplication> ::= <unary> ( ('+' | '-') <unary> )*
-    std::unique_ptr<AstNode> multiplication()
+    //<exponent> ::= <unary> ( ('^') <exponent> )*
+    std::unique_ptr<AstNode> exponent()
     {
         auto e = unary();
+        while (scanner.currentMath<LexToken::Separator>("^") )
+        {
+
+            auto op = *scanner.current<LexToken::Separator>();
+            scanner.next();
+
+            auto right = std::move(exponent());
+            e = std::make_unique<AstBinaryOp>(op, std::move(e), std::move(right));
+
+        }
+        return std::move(e);
+    }
+
+    //<multiplication> ::= <exponent> ( ('+' | '-') <exponent> )*
+    std::unique_ptr<AstNode> multiplication()
+    {
+        auto e = exponent();
         while (scanner.currentMath<LexToken::Separator>("*") || scanner.currentMath<LexToken::Separator>("/") )
         {
 
             auto op = *scanner.current<LexToken::Separator>();
             scanner.next();
 
-            auto right = std::move(unary());
-            e = std::make_unique<AstMathOp>(op, std::move(e), std::move(right));
+            auto right = std::move(exponent());
+            e = std::make_unique<AstBinaryOp>(op, std::move(e), std::move(right));
 
         }
         return std::move(e);
@@ -83,16 +111,39 @@ public:
             scanner.next();
 
             auto right = std::move(multiplication());
-            e = std::make_unique<AstMathOp>(op, std::move(e), std::move(right));
+            e = std::make_unique<AstBinaryOp>(op, std::move(e), std::move(right));
 
         }
         return std::move(e);
     }
 
-    //<expr> ::= <addition>
+    //<comparison> ::= <addition> ( ('==' | '!=' | '<' | '>' | '<=' | '>=' ) <addition> )*
+    std::unique_ptr<AstNode> comparison()
+    {
+        auto e = addition();
+
+        while (scanner.currentMath<LexToken::Separator>("==")
+            || scanner.currentMath<LexToken::Separator>("!=")
+            || scanner.currentMath<LexToken::Separator>("<")
+            || scanner.currentMath<LexToken::Separator>(">")
+            || scanner.currentMath<LexToken::Separator>("<=")
+            || scanner.currentMath<LexToken::Separator>(">="))
+        {
+            auto op = *scanner.current<LexToken::Separator>();
+            scanner.next();
+
+            auto right = std::move(addition());
+            e = std::make_unique<AstBinaryOp>(op, std::move(e), std::move(right));
+
+        }
+        return std::move(e);
+    }
+
+
+    //<expr> ::= <equality>
     std::unique_ptr<AstNode> expr()
     {
-        return addition();
+        return comparison();
     }
 
 protected:
