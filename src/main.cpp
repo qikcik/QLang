@@ -15,24 +15,33 @@
 
 int main()
 {
-    std::string source = "2^3^2";
-    LexScanner scanner(source,"<embed>",{"+","-","*","^","/","(",")","==","!=","<",">","<=",">=","!"});
-
-    std::cout << "\n\nTOKEKNS: \n";
-    while ( scanner.current())
+    while(true)
     {
-        std::cout << scanner.current() << "\n";
-        scanner.next();
+        std::string source{};
+        std::cout << ">";
+        std::getline(std::cin, source);
+
+        if(source == "exit")
+            break;
+
+        LexScanner scanner(source,"<embed>",{"+","-","*","^","/","(",")","==","!=","<",">","<=",">=","!","&&","||"});
+
+        std::cout << "TOKEKNS: \n";
+        while ( scanner.current())
+        {
+            std::cout << scanner.current() << "\n";
+            scanner.next();
+        }
+
+        std::cout << "\nAST: \n";
+        scanner.restart();
+        auto root = AstParser(scanner).expr();
+        std::cout << root->stringify() << "\n";
+
+        std::cout << "\nINTERPRET: \n";
+
+        std::cout << treeWallInterpret(root.get()) << "\n";
     }
-
-    std::cout << "\n\nAST: \n";
-    scanner.restart();
-    auto root = AstParser(scanner).expr();
-    std::cout << root->stringify();
-
-    std::cout << "\n\nINTERPRET: \n";
-
-    std::cout << treeWallInterpret(root.get());
 
     return 0;
 }

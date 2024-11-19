@@ -23,6 +23,7 @@ namespace TemporaryVariable
 
     float getFloat(Any& in);
     int getInteger(Any& in);
+    bool getBool(Any& in);
 }
 
 std::ostream& operator<<(std::ostream& os, const TemporaryVariable::Any& in)
@@ -59,6 +60,15 @@ int TemporaryVariable::getInteger(TemporaryVariable::Any& in)
         std::cout << "WRN: context required conversion to Integer from " << in << "'\n";
         return static_cast<int>((in|vx::as<Float>).value);
     }
+
+    std::cout << "unsupported conversion to Float from:'" << in << "'\n";
+    throw std::runtime_error("conversion error");
+}
+
+bool TemporaryVariable::getBool(TemporaryVariable::Any& in)
+{
+    if(in|vx::is<Bool>)
+        return (in|vx::as<Bool>).value;
 
     std::cout << "unsupported conversion to Float from:'" << in << "'\n";
     throw std::runtime_error("conversion error");
@@ -125,6 +135,13 @@ TemporaryVariable::Any treeWallInterpret(AstNode* in)
         auto left = treeWallInterpret(v->left.get());
         auto right = treeWallInterpret(v->right.get());
 
+        if(left |vx::is<TemporaryVariable::Bool> && right |vx::is<TemporaryVariable::Bool>)
+        {
+            if(v->operation.content == "&&")
+                return TemporaryVariable::Bool{TemporaryVariable::getBool(left) && TemporaryVariable::getBool(right)};
+            if(v->operation.content == "||")
+                return TemporaryVariable::Bool{TemporaryVariable::getBool(left) || TemporaryVariable::getBool(right)};
+        }
 
         if(left |vx::is<TemporaryVariable::Integer> && right |vx::is<TemporaryVariable::Integer>)
         {

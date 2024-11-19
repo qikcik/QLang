@@ -49,6 +49,7 @@ public:
 
             return e;
         }
+        std::cout << "unexpected token:" << scanner.current() << std::endl;
         throw std::runtime_error("unexpected token");
     }
 
@@ -139,11 +140,29 @@ public:
         return std::move(e);
     }
 
+    //<logic> ::= <comparison> ( ('&&'|'||') <comparison> )*
+    std::unique_ptr<AstNode> logic()
+    {
+        auto e = comparison();
 
-    //<expr> ::= <equality>
+        while (scanner.currentMath<LexToken::Separator>("&&")
+            || scanner.currentMath<LexToken::Separator>("||"))
+        {
+            auto op = *scanner.current<LexToken::Separator>();
+            scanner.next();
+
+            auto right = std::move(comparison());
+            e = std::make_unique<AstBinaryOp>(op, std::move(e), std::move(right));
+
+        }
+        return std::move(e);
+    }
+
+
+    //<expr> ::= <logic>
     std::unique_ptr<AstNode> expr()
     {
-        return comparison();
+        return logic();
     }
 
 protected:
