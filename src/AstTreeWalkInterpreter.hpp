@@ -70,7 +70,7 @@ bool TemporaryVariable::getBool(TemporaryVariable::Any& in)
     if(in|vx::is<Bool>)
         return (in|vx::as<Bool>).value;
 
-    std::cout << "unsupported conversion to Float from:'" << in << "'\n";
+    std::cout << "unsupported conversion to Bool from:'" << in << "'\n";
     throw std::runtime_error("conversion error");
 }
 
