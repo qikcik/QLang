@@ -4,13 +4,17 @@
 
 #include "LexToken.hpp"
 
+
 struct AstNode
 {
     virtual std::string stringify() const
     {
         return "<AstNode>{}";
     }
+
+
 };
+
 struct AstInteger : public AstNode
 {
     explicit AstInteger(const LexToken::Integer& inValue) : tokenValue(inValue) {};
@@ -42,6 +46,7 @@ struct AstUnaryOp : public AstNode
     {
         return "<AstUnary>{'"+operation.content+"',"+inner->stringify()+"}";
     }
+
 };
 
 struct AstMathOp : public AstNode

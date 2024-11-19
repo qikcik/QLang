@@ -10,21 +10,29 @@
 #include "vx.hpp"
 
 #include "AstParser.hpp"
+#include "AstTreeWalkInterpreter.hpp"
 
 
 int main()
 {
 
-    LexScanner scanner("(2+-2)*2/4","<embed>",{"+","-","*","/","(",")"});
+    LexScanner scanner("(2+2)*2","<embed>",{"+","-","*","/","(",")"});
+
+    std::cout << "\n\nTOEKNS: \n";
     while ( scanner.current())
     {
         std::cout << scanner.current() << "\n";
         scanner.next();
     }
 
-    std::cout << "AST: \n";
+    std::cout << "\n\nAST: \n";
     scanner.restart();
-    std::cout << AstParser(scanner).expr()->stringify();
+    auto root = AstParser(scanner).expr();
+    std::cout << root->stringify();
+
+    std::cout << "\n\nINTERPRET: \n";
+
+    std::cout << treeWallInterpret(root.get())->stringify();
 
     return 0;
 }
