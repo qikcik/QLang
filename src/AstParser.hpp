@@ -11,50 +11,51 @@ public:
     explicit AstParser(LexScanner& inScanner) : scanner(inScanner) {};
 
     //<primary> ::= <integer> | <float> | <string> |  <bool> as ('true'|'false') | '(' <expr> ')'
-    std::unique_ptr<AstNode> primary()
+    std::unique_ptr<AstNode::Any> primary()
     {
         if(const auto v = scanner.current<LexToken::Integer>())
         {
             scanner.next();
-            return std::make_unique<AstInteger>( *v );
+            return std::make_unique<AstNode::Any>( AstNode::Integer{*v} );
         }
         if(const auto v =scanner.current<LexToken::Float>())
         {
             scanner.next();
-            return std::make_unique<AstFloat>( *v );
+            return std::make_unique<AstNode::Any>( AstNode::Float{*v} );
         }
         if(const auto v =scanner.current<LexToken::String>())
         {
             scanner.next();
-            return std::make_unique<AstString>( *v );
+            return std::make_unique<AstNode::Any>( AstNode::String{*v} );
         }
         if(scanner.currentMath<LexToken::Label>("true") || scanner.currentMath<LexToken::Label>("false"))
         {
             const auto v = *scanner.current<LexToken::Label>();
             scanner.next();
-            return std::make_unique<AstBool>( v );
+            return std::make_unique<AstNode::Any>( AstNode::Bool{v} );
         }
-        if(scanner.currentMath<LexToken::Separator>("("))
+        if(auto open = scanner.currentMath<LexToken::Separator>("("))
         {
             scanner.next();
-            std::unique_ptr<AstNode> e = std::move(expr());
+            std::unique_ptr<AstNode::Any> e = std::move(expr());
             if(scanner.currentMath<LexToken::Separator>(")"))
             {
                 scanner.next();
             }
             else
             {
-                throw std::runtime_error("Unbalanced parentheses");
+                std::cout << "\nCRITICAL PARSER ERROR: expected closing parentheses, opened " << LexToken::printHint(*open) << "not found closing ')'" << std::endl;
+                throw std::runtime_error("");
             }
 
             return e;
         }
-        std::cout << "unexpected token:" << scanner.current() << std::endl;
-        throw std::runtime_error("unexpected token");
+        std::cout << "\nCRITICAL PARSER ERROR: couldn't parse as primary " << (scanner.current() ? LexToken::printHint(*scanner.current()) : "'in the end of file'") << "unexpected token" << std::endl;
+        throw std::runtime_error("");
     }
 
     //<unary> ::= ('+'|'-'|'!') <unary> | <primary>
-    std::unique_ptr<AstNode> unary()
+    std::unique_ptr<AstNode::Any> unary()
     {
         if(scanner.currentMath<LexToken::Separator>("+") || scanner.currentMath<LexToken::Separator>("-") || scanner.currentMath<LexToken::Separator>("!"))
         {
@@ -62,13 +63,13 @@ public:
             scanner.next();
 
             auto inner = std::move(unary());
-            return std::make_unique<AstUnaryOp>( op, std::move(inner) );
+            return std::make_unique<AstNode::Any>( AstNode::UnaryOp{op, std::move(inner)} );
         }
         return primary();
     }
 
     //<exponent> ::= <unary> ( ('^') <exponent> )*
-    std::unique_ptr<AstNode> exponent()
+    std::unique_ptr<AstNode::Any> exponent()
     {
         auto e = unary();
         while (scanner.currentMath<LexToken::Separator>("^") )
@@ -78,14 +79,14 @@ public:
             scanner.next();
 
             auto right = std::move(exponent());
-            e = std::make_unique<AstBinaryOp>(op, std::move(e), std::move(right));
+            e = std::make_unique<AstNode::Any>( AstNode::BinaryOp{op, std::move(e), std::move(right)} );
 
         }
         return std::move(e);
     }
 
     //<multiplication> ::= <exponent> ( ('+' | '-') <exponent> )*
-    std::unique_ptr<AstNode> multiplication()
+    std::unique_ptr<AstNode::Any> multiplication()
     {
         auto e = exponent();
         while (scanner.currentMath<LexToken::Separator>("*") || scanner.currentMath<LexToken::Separator>("/") )
@@ -95,14 +96,14 @@ public:
             scanner.next();
 
             auto right = std::move(exponent());
-            e = std::make_unique<AstBinaryOp>(op, std::move(e), std::move(right));
+            e = std::make_unique<AstNode::Any>(AstNode::BinaryOp{op, std::move(e), std::move(right)});
 
         }
         return std::move(e);
     }
 
     //<addition> ::= <multiplication> ( ('+' | '-') <multiplication> )*
-    std::unique_ptr<AstNode> addition()
+    std::unique_ptr<AstNode::Any> addition()
     {
         auto e = multiplication();
 
@@ -112,14 +113,14 @@ public:
             scanner.next();
 
             auto right = std::move(multiplication());
-            e = std::make_unique<AstBinaryOp>(op, std::move(e), std::move(right));
+            e = std::make_unique<AstNode::Any>(AstNode::BinaryOp{op, std::move(e), std::move(right)});
 
         }
         return std::move(e);
     }
 
     //<comparison> ::= <addition> ( ('==' | '!=' | '<' | '>' | '<=' | '>=' ) <addition> )*
-    std::unique_ptr<AstNode> comparison()
+    std::unique_ptr<AstNode::Any> comparison()
     {
         auto e = addition();
 
@@ -134,14 +135,14 @@ public:
             scanner.next();
 
             auto right = std::move(addition());
-            e = std::make_unique<AstBinaryOp>(op, std::move(e), std::move(right));
+            e = std::make_unique<AstNode::Any>(AstNode::BinaryOp{op, std::move(e), std::move(right)});
 
         }
         return std::move(e);
     }
 
     //<logic> ::= <comparison> ( ('&&'|'||') <comparison> )*
-    std::unique_ptr<AstNode> logic()
+    std::unique_ptr<AstNode::Any> logic()
     {
         auto e = comparison();
 
@@ -152,7 +153,7 @@ public:
             scanner.next();
 
             auto right = std::move(comparison());
-            e = std::make_unique<AstBinaryOp>(op, std::move(e), std::move(right));
+            e = std::make_unique<AstNode::Any>(AstNode::BinaryOp{op, std::move(e), std::move(right)});
 
         }
         return std::move(e);
@@ -160,7 +161,7 @@ public:
 
 
     //<expr> ::= <logic>
-    std::unique_ptr<AstNode> expr()
+    std::unique_ptr<AstNode::Any> expr()
     {
         return logic();
     }

@@ -75,25 +75,26 @@ bool TemporaryVariable::getBool(TemporaryVariable::Any& in)
 }
 
 
-TemporaryVariable::Any treeWallInterpret(AstNode* in)
+TemporaryVariable::Any treeWallInterpret(AstNode::Any& in)
 {
-    if (auto* v = dynamic_cast<AstFloat*>(in))
+    if (in |vx::is<AstNode::Float>)
     {
-        return TemporaryVariable::Float{v->tokenValue.content};
+        return TemporaryVariable::Float{(in|vx::as<AstNode::Float>).tokenValue.content};
     }
-    else if (auto* v = dynamic_cast<AstInteger*>(in))
+    else if (in |vx::is<AstNode::Integer>)
     {
-        return TemporaryVariable::Integer{v->tokenValue.content};
+        return TemporaryVariable::Integer{(in|vx::as<AstNode::Integer>).tokenValue.content};
     }
-    else if (auto* v = dynamic_cast<AstBool*>(in))
+    else if (in |vx::is<AstNode::Bool>)
     {
-        return TemporaryVariable::Bool{v->tokenValue.content == "true"};
+        return TemporaryVariable::Bool{(in|vx::as<AstNode::Bool>).tokenValue.content == "true"};
     }
-    else if (auto* v = dynamic_cast<AstUnaryOp*>(in))
+    else if (in |vx::is<AstNode::UnaryOp>)
     {
-        if(v->operation.content == "-")
+        auto& v = in|vx::as<AstNode::UnaryOp>;
+        if(v.tokenValue.content == "-")
         {
-            auto inner = treeWallInterpret(v->inner.get());
+            auto inner = treeWallInterpret(*v.inner);
 
             if (inner |vx::is<TemporaryVariable::Float>)
             {
@@ -105,9 +106,9 @@ TemporaryVariable::Any treeWallInterpret(AstNode* in)
             }
         }
 
-        if(v->operation.content == "+")
+        if(v.tokenValue.content == "+")
         {
-            auto inner = treeWallInterpret(v->inner.get());
+            auto inner = treeWallInterpret(*v.inner);
 
             if (inner |vx::is<TemporaryVariable::Float>)
             {
@@ -119,9 +120,9 @@ TemporaryVariable::Any treeWallInterpret(AstNode* in)
             }
         }
 
-        if(v->operation.content == "!")
+        if(v.tokenValue.content == "!")
         {
-            auto inner = treeWallInterpret(v->inner.get());
+            auto inner = treeWallInterpret(*v.inner);
 
             if (inner |vx::is<TemporaryVariable::Bool>)
             {
@@ -130,44 +131,66 @@ TemporaryVariable::Any treeWallInterpret(AstNode* in)
         }
     }
 
-    else if (auto* v = dynamic_cast<AstBinaryOp*>(in))
+    else if (in |vx::is<AstNode::BinaryOp>)
     {
-        auto left = treeWallInterpret(v->left.get());
-        auto right = treeWallInterpret(v->right.get());
+        auto& v = in|vx::as<AstNode::BinaryOp>;
 
-        if(left |vx::is<TemporaryVariable::Bool> && right |vx::is<TemporaryVariable::Bool>)
+        auto left = treeWallInterpret(*v.left);
+
+        if(left |vx::is<TemporaryVariable::Bool>)
         {
-            if(v->operation.content == "&&")
-                return TemporaryVariable::Bool{TemporaryVariable::getBool(left) && TemporaryVariable::getBool(right)};
-            if(v->operation.content == "||")
-                return TemporaryVariable::Bool{TemporaryVariable::getBool(left) || TemporaryVariable::getBool(right)};
+            if(v.tokenValue.content == "&&")
+            {
+                if(TemporaryVariable::getBool(left) == false)
+                    return TemporaryVariable::Bool{false};
+
+                auto right = treeWallInterpret(*v.right);
+                return TemporaryVariable::Bool{TemporaryVariable::getBool(right)};
+
+            }
+            if(v.tokenValue.content == "||")
+            {
+                if(TemporaryVariable::getBool(left) == true)
+                    return TemporaryVariable::Bool{true};
+
+                auto right = treeWallInterpret(*v.right);
+                return TemporaryVariable::Bool{TemporaryVariable::getBool(right)};
+            }
+
+            auto right = treeWallInterpret(*v.right);
+            if(v.tokenValue.content == "==")
+                return TemporaryVariable::Bool{TemporaryVariable::getBool(left) == TemporaryVariable::getBool(right)};
+            if(v.tokenValue.content == "!=")
+                return TemporaryVariable::Bool{TemporaryVariable::getBool(left) != TemporaryVariable::getBool(right)};
         }
+
+        auto right = treeWallInterpret(*v.right);
 
         if(left |vx::is<TemporaryVariable::Integer> && right |vx::is<TemporaryVariable::Integer>)
         {
-            if(v->operation.content == "==")
+            if(v.tokenValue.content == "==")
                 return TemporaryVariable::Bool{TemporaryVariable::getInteger(left) == TemporaryVariable::getInteger(right)};
-            if(v->operation.content == "!=")
+            if(v.tokenValue.content == "!=")
                 return TemporaryVariable::Bool{TemporaryVariable::getInteger(left) != TemporaryVariable::getInteger(right)};
-            if(v->operation.content == "<")
+            if(v.tokenValue.content == "<")
                 return TemporaryVariable::Bool{TemporaryVariable::getInteger(left) < TemporaryVariable::getInteger(right)};
-            if(v->operation.content == ">")
+            if(v.tokenValue.content == ">")
                 return TemporaryVariable::Bool{TemporaryVariable::getInteger(left) > TemporaryVariable::getInteger(right)};
-            if(v->operation.content == "<=")
+            if(v.tokenValue.content == "<=")
                 return TemporaryVariable::Bool{TemporaryVariable::getInteger(left) <= TemporaryVariable::getInteger(right)};
-            if(v->operation.content == ">=")
+            if(v.tokenValue.content == ">=")
                 return TemporaryVariable::Bool{TemporaryVariable::getInteger(left) >= TemporaryVariable::getInteger(right)};
 
-            if(v->operation.content == "+")
+            if(v.tokenValue.content == "+")
                 return TemporaryVariable::Integer{TemporaryVariable::getInteger(left) + TemporaryVariable::getInteger(right)};
-            if(v->operation.content == "-")
+            if(v.tokenValue.content == "-")
                 return TemporaryVariable::Integer{TemporaryVariable::getInteger(left) - TemporaryVariable::getInteger(right)};
-            if(v->operation.content == "*")
+            if(v.tokenValue.content == "*")
                 return TemporaryVariable::Integer{TemporaryVariable::getInteger(left) * TemporaryVariable::getInteger(right)};
-            if(v->operation.content == "/")
+            if(v.tokenValue.content == "/")
                 return TemporaryVariable::Integer{TemporaryVariable::getInteger(left) / TemporaryVariable::getInteger(right)};
 
-            if(v->operation.content == "^")
+            if(v.tokenValue.content == "^")
                 return TemporaryVariable::Integer{static_cast<int>(
                     std::pow(TemporaryVariable::getInteger(left),TemporaryVariable::getInteger(right))
                 )};
@@ -175,37 +198,44 @@ TemporaryVariable::Any treeWallInterpret(AstNode* in)
 
         if((left |vx::is<TemporaryVariable::Integer> || left |vx::is<TemporaryVariable::Float>) && (right |vx::is<TemporaryVariable::Integer> || right |vx::is<TemporaryVariable::Float>)) // If any argument is float, promote to float
         {
-            if(v->operation.content == "==")
+            if(v.tokenValue.content == "==")
                 return TemporaryVariable::Bool{TemporaryVariable::getFloat(left) == TemporaryVariable::getFloat(right)};
-            if(v->operation.content == "!=")
+            if(v.tokenValue.content == "!=")
                 return TemporaryVariable::Bool{TemporaryVariable::getFloat(left) != TemporaryVariable::getFloat(right)};
-            if(v->operation.content == "<")
+            if(v.tokenValue.content == "<")
                 return TemporaryVariable::Bool{TemporaryVariable::getFloat(left) < TemporaryVariable::getFloat(right)};
-            if(v->operation.content == ">")
+            if(v.tokenValue.content == ">")
                 return TemporaryVariable::Bool{TemporaryVariable::getFloat(left) > TemporaryVariable::getFloat(right)};
-            if(v->operation.content == "<=")
+            if(v.tokenValue.content == "<=")
                 return TemporaryVariable::Bool{TemporaryVariable::getFloat(left) <= TemporaryVariable::getFloat(right)};
-            if(v->operation.content == ">=")
+            if(v.tokenValue.content == ">=")
                 return TemporaryVariable::Bool{TemporaryVariable::getFloat(left) >= TemporaryVariable::getFloat(right)};
 
 
-            if(v->operation.content == "+")
+            if(v.tokenValue.content == "+")
                 return TemporaryVariable::Float{TemporaryVariable::getFloat(left) + TemporaryVariable::getFloat(right)};
-            if(v->operation.content == "-")
+            if(v.tokenValue.content == "-")
                 return TemporaryVariable::Float{TemporaryVariable::getFloat(left) - TemporaryVariable::getFloat(right)};
-            if(v->operation.content == "*")
+            if(v.tokenValue.content == "*")
                 return TemporaryVariable::Float{TemporaryVariable::getFloat(left) * TemporaryVariable::getFloat(right)};
-            if(v->operation.content == "/")
+            if(v.tokenValue.content == "/")
                 return TemporaryVariable::Float{TemporaryVariable::getFloat(left) / TemporaryVariable::getFloat(right)};
 
-            if(v->operation.content == "^")
+            if(v.tokenValue.content == "^")
                 return TemporaryVariable::Float{std::pow(TemporaryVariable::getFloat(left),TemporaryVariable::getFloat(right))};
         }
 
-        std::cout << "unsupported operation:'" << v->operation.content << "' between left:'" << left << "' and right:'" << right << "'\n";
-        throw std::runtime_error("interpreting error");
+        std::cout << "unsupported operation:'" << v.tokenValue.content << "' between left:'" << left << "' and right:'" << right << "'\n";
+        std::cout << v.tokenValue.source.printHint()  << "here \n";
+        std::cout << "left: " << AstNode::stringify(*v.left) << '\n';
+        std::cout << "right: " << AstNode::stringify(*v.right) << '\n';
+        throw std::runtime_error("");
     }
 
-    std::cout << "unhandled error at AST node:'" << in->stringify() << "'\n";
+    std::cout << "unable to execute '" << in << "'\n";
+    std::visit([](auto& v)
+    {
+        std::cout << v.tokenValue.source.printHint()  << "here \n";
+    },in);
     throw std::runtime_error("interpreting error");
 }

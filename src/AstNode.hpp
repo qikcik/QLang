@@ -1,85 +1,105 @@
 #pragma once
+#include <array>
 #include <memory>
 #include <string>
 
 #include "LexToken.hpp"
 
 
-struct AstNode
+
+namespace AstNode
 {
-    virtual std::string stringify() const
+    struct Literal {}; struct Integer; struct Float; struct String; struct Bool;
+    struct Operation {}; struct UnaryOp; struct BinaryOp;
+
+    using Any = std::variant<Integer,Float,String,Bool,UnaryOp,BinaryOp>;
+
+    struct Integer : public Literal
     {
-        return "<AstNode>{}";
+        explicit Integer(const LexToken::Integer& inValue) : tokenValue(inValue) {};
+        LexToken::Integer tokenValue;
+    };
+
+    struct Float final : public Literal
+    {
+        explicit Float(const LexToken::Float& inValue) : tokenValue(inValue) {};
+        LexToken::Float tokenValue;
+    };
+
+    struct Bool final : public Literal
+    {
+        explicit Bool(const LexToken::Label& inValue) : tokenValue(inValue) {};
+        LexToken::Label tokenValue;
+    };
+
+    struct String final : public Literal
+    {
+        explicit String(const LexToken::String& inValue) : tokenValue(inValue) {};
+        LexToken::String tokenValue;
+    };
+
+
+    struct UnaryOp final : public Operation
+    {
+        UnaryOp(const LexToken::Separator& inOp,std::unique_ptr<AstNode::Any> inInner) : tokenValue(inOp), inner(std::move(inInner)) {};
+        LexToken::Separator tokenValue;
+        std::unique_ptr<AstNode::Any> inner;
+
+    };
+
+    struct BinaryOp final : public Operation
+    {
+        BinaryOp(const LexToken::Separator& inOp, std::unique_ptr<AstNode::Any>  inLeft, std::unique_ptr<AstNode::Any>  inRight) : tokenValue(inOp), left(std::move(inLeft)), right(std::move(inRight)) {};
+        LexToken::Separator tokenValue;
+        std::unique_ptr<AstNode::Any> left;
+        std::unique_ptr<AstNode::Any> right;
+    };
+
+    std::string stringify(const AstNode::Any& in, int intend = 0)
+    {
+        std::string result;
+        for(int i=0;i!=intend;i++) result+="\t";
+
+        result += in |vx::match {
+            [&in](const AstNode::Integer& v)
+                { return "Integer{"+std::to_string(v.tokenValue.content)+"} at "+v.tokenValue.source.stringify(); },
+            [&in](const AstNode::Float& v)
+                {return "Float{"+std::to_string(v.tokenValue.content)+"} at "+v.tokenValue.source.stringify(); },
+            [&in](const AstNode::Bool& v)
+                { return "Bool{"+v.tokenValue.content+"} at "+v.tokenValue.source.stringify(); },
+            [&in](const AstNode::String& v)
+                { return "String{"+v.tokenValue.content+"} at "+v.tokenValue.source.stringify(); },
+            [&in,intend](const AstNode::UnaryOp& v)
+            {
+                std::string result = "UnaryOp{\n";
+
+                for(int i=0;i!=intend+1;i++) result+="\t";
+                result += v.tokenValue.content+" at "+v.tokenValue.source.stringify()+"\n";
+
+                result += stringify(*v.inner, intend+1)+"\n";
+                for(int i=0;i!=intend;i++) result+="\t";
+                return result + "}";
+            },
+            [&in,intend](const AstNode::BinaryOp& v)
+            {
+                std::string result = "BinaryOp{\n";
+
+                for(int i=0;i!=intend+1;i++) result+="\t";
+                result += v.tokenValue.content+" at "+v.tokenValue.source.stringify()+"\n";
+
+                result += stringify(*v.left, intend+1)+",\n";
+                result += stringify(*v.right, intend+1)+"\n";
+                for(int i=0;i!=intend;i++) result+="\t";
+                return result + "}";
+            },
+        };
+
+        return result;
     }
-};
+}
 
 
-struct AstInteger final : public AstNode
+std::ostream& operator<<(std::ostream& os, const AstNode::Any& in)
 {
-    explicit AstInteger(const LexToken::Integer& inValue) : tokenValue(inValue) {};
-    LexToken::Integer tokenValue;
-
-    std::string stringify() const override
-    {
-        return "<AstInteger>{"+std::to_string(tokenValue.content)+"} at "+tokenValue.source.stringify();
-    }
-
-};
-struct AstFloat final : public AstNode
-{
-    explicit AstFloat(const LexToken::Float& inValue) : tokenValue(inValue) {};
-    LexToken::Float tokenValue;
-
-    std::string stringify() const override
-    {
-        return "<AstFloat>{"+std::to_string(tokenValue.content)+"} at "+tokenValue.source.stringify();
-    }
-};
-
-struct AstBool final : public AstNode
-{
-    explicit AstBool(const LexToken::Label& inValue) : tokenValue(inValue) {};
-    LexToken::Label tokenValue;
-
-    std::string stringify() const override
-    {
-        return "<AstBool>{"+tokenValue.content+"} at "+tokenValue.source.stringify();
-    }
-};
-
-struct AstString final : public AstNode
-{
-    explicit AstString(const LexToken::String& inValue) : tokenValue(inValue) {};
-    LexToken::String tokenValue;
-
-    std::string stringify() const override
-    {
-        return "<AstString>{"+tokenValue.content+"} at "+tokenValue.source.stringify();
-    }
-};
-
-struct AstUnaryOp final : public AstNode
-{
-    AstUnaryOp(const LexToken::Separator& inOp, std::unique_ptr<AstNode> inInner) : operation(inOp), inner(std::move(inInner)) {};
-    LexToken::Separator operation;
-    std::unique_ptr<AstNode> inner;
-
-    std::string stringify() const override
-    {
-        return "<AstUnary>{'"+operation.content+"',"+inner->stringify()+"} at "+operation.source.stringify();
-    }
-
-};
-
-struct AstBinaryOp final : public AstNode
-{
-    AstBinaryOp(const LexToken::Separator& inOp, std::unique_ptr<AstNode> inLeft, std::unique_ptr<AstNode> inRight) : operation(inOp), left(std::move(inLeft)), right(std::move(inRight)) {};
-    LexToken::Separator operation;
-    std::unique_ptr<AstNode> left;
-    std::unique_ptr<AstNode> right;
-
-    std::string stringify() const override
-    {
-        return "<AstMathOp>{"+left->stringify()+",'"+operation.content+"',"+right->stringify()+"} at "+operation.source.stringify();
-    }
-};
+    return os << AstNode::stringify(in, 0);
+}

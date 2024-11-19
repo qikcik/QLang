@@ -1,19 +1,23 @@
 #pragma once
 
+#include <memory>
 #include <optional>
 #include <string>
 #include <vector>
 #include <variant>
 
+#include "CodeSource.hpp"
+
 namespace  LexToken
 {
     struct Source
     {
-        std::string fromSource {};
+        std::shared_ptr<CodeSource> fromSource {};
         size_t atLine {};
         size_t startingCharacter {};
 
         std::string stringify() const;
+        std::string printHint() const;
     };
 
     template<typename T>
@@ -32,6 +36,8 @@ namespace  LexToken
     struct Float        final       : public WithContent<float>       {};
 
     using Any = std::variant<Separator,Label,String,Integer,Float>;
+
+    std::string printHint(const Any& in);
 };
 
 std::ostream& operator<<(std::ostream& os, const LexToken::Source& in);

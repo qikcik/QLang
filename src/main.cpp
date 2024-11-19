@@ -11,36 +11,44 @@
 
 #include "AstParser.hpp"
 #include "AstTreeWalkInterpreter.hpp"
+#include "CodeSource.hpp"
 
 
 int main()
 {
     while(true)
     {
-        std::string source{};
+        std::shared_ptr<CodeSource> source = std::make_shared<CodeSource>("repl");
         std::cout << ">";
-        std::getline(std::cin, source);
+        std::getline(std::cin, source->content);
 
-        if(source == "exit")
+        if(source->content == "exit")
             break;
 
-        LexScanner scanner(source,"<embed>",{"+","-","*","^","/","(",")","==","!=","<",">","<=",">=","!","&&","||"});
-
-        std::cout << "TOKEKNS: \n";
-        while ( scanner.current())
+        try
         {
-            std::cout << scanner.current() << "\n";
-            scanner.next();
+            LexScanner scanner(source,{"+","-","*","^","/","(",")","==","!=","<",">","<=",">=","!","&&","||"});
+
+            std::cout << "TOKEKNS: \n";
+            while ( scanner.current())
+            {
+                std::cout << scanner.current() << "\n";
+                scanner.next();
+            }
+
+            std::cout << "\nAST: \n";
+            scanner.restart();
+            auto root = AstParser(scanner).expr();
+            std::cout << *root << "\n";
+
+            std::cout << "\nINTERPRET: \n";
+
+            std::cout << treeWallInterpret(*root) << "\n";
         }
-
-        std::cout << "\nAST: \n";
-        scanner.restart();
-        auto root = AstParser(scanner).expr();
-        std::cout << root->stringify() << "\n";
-
-        std::cout << "\nINTERPRET: \n";
-
-        std::cout << treeWallInterpret(root.get()) << "\n";
+        catch(std::exception& e)
+        {
+            std::cout << "\nERROR OCCURED: more info above \n";
+        }
     }
 
     return 0;

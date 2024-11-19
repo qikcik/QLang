@@ -4,7 +4,20 @@
 
 std::string LexToken::Source::stringify() const
 {
-    return fromSource + ":" + std::to_string(atLine) + ":" + std::to_string(startingCharacter);
+    return fromSource->name + ":" + std::to_string(atLine) + ":" + std::to_string(startingCharacter);
+}
+
+std::string LexToken::Source::printHint() const
+{
+    return fromSource->printHint(atLine, startingCharacter);
+}
+
+std::string LexToken::printHint(const Any& in)
+{
+    return std::visit([](auto& v)
+    {
+        return v.source.printHint();
+    },in);
 }
 
 std::ostream& operator<<(std::ostream& os, const LexToken::Source& in)

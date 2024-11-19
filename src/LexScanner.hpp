@@ -1,12 +1,14 @@
 #pragma once
+#include <memory>
 #include <optional>
 
 #include "LexToken.hpp"
+#include "CodeSource.hpp"
 
 class LexScanner
 {
 public:
-    explicit LexScanner(const std::string& inSource, const std::string& inSourceName,const std::vector<std::string>& inSeparators);
+    explicit LexScanner(std::shared_ptr<CodeSource> inSource, const std::vector<std::string>& inSeparators);
 
     std::optional<LexToken::Any> next();
     std::optional<LexToken::Any> current() {return currentToken;};
@@ -42,11 +44,10 @@ protected:
 
     LexToken::Source makeSource(size_t startingCharacter) const;
 
-    const std::string& source;
+    std::shared_ptr<CodeSource> source;
     size_t currentLine {1};
 
     size_t positionIdx {};
     std::optional<LexToken::Any> currentToken {};
-    std::string sourceName {};
     std::vector<std::string> separators {};
 };

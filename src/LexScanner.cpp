@@ -2,24 +2,25 @@
 
 #include <algorithm>
 #include <assert.h>
+#include <iostream>
 #include <stack>
 #include <ostream>
 
-LexScanner::LexScanner(const std::string& inSource, const std::string& inSourceName,const std::vector<std::string>& inSeparators)
-:   source(inSource),
-    sourceName(inSourceName),
+
+
+LexScanner::LexScanner(std::shared_ptr<CodeSource> inSource, const std::vector<std::string>& inSeparators)
+:   source(std::move(inSource)),
     separators(inSeparators)
 {
     next();
 }
 
-
 std::optional<LexToken::Any> LexScanner::next()
 {
     auto beginIdx = positionIdx;
-    while(source[positionIdx] != '\0')
+    while(source->content[positionIdx] != '\0')
     {
-        auto charIt = source[positionIdx];
+        auto charIt = source->content[positionIdx];
 
         if(charIt == '\n')
         {
@@ -51,7 +52,8 @@ std::optional<LexToken::Any> LexScanner::next()
         }
         else
         {
-            throw std::runtime_error( "unidentified token starting with:" + std::to_string(static_cast<char>(source[positionIdx])) + " at: "+ std::to_string(positionIdx));
+            std::cout << "\nCRITICAL SCANNER ERROR " << source->printHint(currentLine,positionIdx) << "unexpected character" << std::endl;
+            throw std::runtime_error( "unidentified token starting with:" + std::to_string(static_cast<char>(source->content[positionIdx])) + " at: "+ std::to_string(positionIdx));
             break;
         }
     }
@@ -67,14 +69,14 @@ void LexScanner::restart()
 
 bool LexScanner::tryTokenizeNumber()
 {
-    if(!isdigit(source[positionIdx])) return false;
+    if(!isdigit(source->content[positionIdx])) return false;
 
     std::string summed;
     const size_t startPositionIdx = positionIdx;
     bool containsDot = false;
-    while(positionIdx != source.size())
+    while(positionIdx != source->content.size())
     {
-        auto charIt = source[positionIdx];
+        auto charIt = source->content[positionIdx];
 
         if(isdigit(charIt))
         {
@@ -106,15 +108,15 @@ bool LexScanner::tryTokenizeNumber()
 
 bool LexScanner::tryTokenizeString()
 {
-    if(source[positionIdx] != '"') return false;
+    if(source->content[positionIdx] != '"') return false;
 
     auto beginIdx = positionIdx;
     positionIdx++;
 
-    while(source[positionIdx] != '\0')
+    while(source->content[positionIdx] != '\0')
     {
-        auto prevCharIt = source[positionIdx-1];
-        auto charIt = source[positionIdx];
+        auto prevCharIt = source->content[positionIdx-1];
+        auto charIt = source->content[positionIdx];
 
         if(charIt == '"' && prevCharIt != '\\') // allow escape code
             break;
@@ -122,7 +124,7 @@ bool LexScanner::tryTokenizeString()
         positionIdx++;
     }
     positionIdx++; // escape string
-    currentToken = LexToken::String{makeSource(beginIdx),source.substr(beginIdx,positionIdx-beginIdx)};
+    currentToken = LexToken::String{makeSource(beginIdx),source->content.substr(beginIdx,positionIdx-beginIdx)};
     return true;
 }
 
@@ -136,7 +138,7 @@ bool LexScanner::tryTokenizeSeparator()
         bool match {true};
         for(int operatCharIdx = 0; operatCharIdx != operatIt.size();operatCharIdx++)
         {
-            if(source[beginIdx+operatCharIdx] != operatIt[operatCharIdx])
+            if(source->content[beginIdx+operatCharIdx] != operatIt[operatCharIdx])
             {
                 match = false;
                 break;
@@ -155,13 +157,13 @@ bool LexScanner::tryTokenizeSeparator()
 
 bool LexScanner::tryTokenizeLabel()
 {
-    if(!((source[positionIdx] >= 'a' && source[positionIdx] <= 'z') || (source[positionIdx] >= 'A' && source[positionIdx] <= 'Z')))
+    if(!((source->content[positionIdx] >= 'a' && source->content[positionIdx] <= 'z') || (source->content[positionIdx] >= 'A' && source->content[positionIdx] <= 'Z')))
         return false;
 
     auto beginIdx = positionIdx;
-    while(source[positionIdx] != '\0')
+    while(source->content[positionIdx] != '\0')
     {
-        auto charIt = source[positionIdx];
+        auto charIt = source->content[positionIdx];
 
         if ((charIt >= '0' && charIt <= '9') || (charIt >= 'A' && charIt <= 'Z') ||
             (charIt >= 'a' && charIt <= 'z') || charIt == '_')
@@ -170,14 +172,14 @@ bool LexScanner::tryTokenizeLabel()
         } else break;
     }
 
-    currentToken = LexToken::Label{makeSource(beginIdx),source.substr(beginIdx,positionIdx-beginIdx)};
+    currentToken = LexToken::Label{makeSource(beginIdx),source->content.substr(beginIdx,positionIdx-beginIdx)};
     return true;
 }
 
 LexToken::Source LexScanner::makeSource(size_t startingCharacter) const
 {
     return LexToken::Source {
-        .fromSource = sourceName,
+        .fromSource = source,
         .atLine =  currentLine,
         .startingCharacter = startingCharacter,
     };
