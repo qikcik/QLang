@@ -25,6 +25,20 @@ int main()
         if(source->content == "exit")
             break;
 
+        if(source->content == "multiline")
+        {
+            source->content = "";
+            while(true)
+            {
+                std::string line;
+                std::getline(std::cin, line);
+                if(line == "run")
+                    break;
+
+                source->content += line+'\n';
+            }
+        }
+
         try
         {
             LexScanner scanner(source,{"+","-","*","^","/","(",")","==","!=","<",">","<=",">=","!","&&","||","{","}"});

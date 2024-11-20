@@ -19,7 +19,7 @@ struct CodeSource
 
             if(currentLine == line)
             {
-                startChar = i;
+                startChar = i+1;
                 break;
             }
         }

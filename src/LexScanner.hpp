@@ -46,7 +46,7 @@ protected:
 
     std::shared_ptr<CodeSource> source;
     size_t currentLine {1};
-
+    size_t newLinePosition {0};
     size_t positionIdx {};
     std::optional<LexToken::Any> currentToken {};
     std::vector<std::string> separators {};

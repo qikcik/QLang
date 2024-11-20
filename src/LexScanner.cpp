@@ -25,6 +25,7 @@ std::optional<LexToken::Any> LexScanner::next()
         if(charIt == '\n')
         {
             positionIdx++;
+            newLinePosition = positionIdx;
             currentLine++;
             continue;
         }
@@ -63,7 +64,10 @@ std::optional<LexToken::Any> LexScanner::next()
 
 void LexScanner::restart()
 {
+    currentLine = 1;
+    newLinePosition = 0;
     positionIdx = 0;
+    currentToken = std::nullopt;
     next();
 }
 
@@ -181,7 +185,7 @@ LexToken::Source LexScanner::makeSource(size_t startingCharacter) const
     return LexToken::Source {
         .fromSource = source,
         .atLine =  currentLine,
-        .startingCharacter = startingCharacter,
+        .startingCharacter = startingCharacter-newLinePosition,
     };
 }
 
