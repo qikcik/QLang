@@ -11,8 +11,9 @@ namespace AstNode
 {
     struct Literal {}; struct Integer; struct Float; struct String; struct Bool;
     struct Operation {}; struct UnaryOp; struct BinaryOp;
+    struct Stmt {}; struct Block; struct PrintStmt;
 
-    using Any = std::variant<Integer,Float,String,Bool,UnaryOp,BinaryOp>;
+    using Any = std::variant<Integer,Float,String,Bool,UnaryOp,BinaryOp,Block,PrintStmt>;
 
     struct Integer : public Literal
     {
@@ -55,6 +56,19 @@ namespace AstNode
         std::unique_ptr<AstNode::Any> right;
     };
 
+    struct Block final : public Stmt
+    {
+        explicit Block(std::vector<std::unique_ptr<AstNode::Any>> inStatements) : statements(std::move(inStatements)) {}
+        std::vector<std::unique_ptr<AstNode::Any>> statements;
+    };
+
+    struct PrintStmt final : public Stmt
+    {
+        PrintStmt(const LexToken::Label& inOp,std::unique_ptr<AstNode::Any> inInner) : tokenValue(inOp), inner(std::move(inInner)) {};
+        LexToken::Label tokenValue;
+        std::unique_ptr<AstNode::Any> inner;
+    };
+
     std::string stringify(const AstNode::Any& in, int intend = 0)
     {
         std::string result;
@@ -89,6 +103,27 @@ namespace AstNode
 
                 result += stringify(*v.left, intend+1)+",\n";
                 result += stringify(*v.right, intend+1)+"\n";
+                for(int i=0;i!=intend;i++) result+="\t";
+                return result + "}";
+            },
+            [&in,intend](const AstNode::Block& v)
+            {
+                std::string result = "Block{\n";
+                for(auto& i : v.statements)
+                {
+                    result += stringify(*i, intend+1)+",\n";
+                }
+                for(int i=0;i!=intend;i++) result+="\t";
+                return result + "}";
+            },
+            [&in,intend](const AstNode::PrintStmt& v)
+            {
+                std::string result = "PrintStmt{\n";
+
+                for(int i=0;i!=intend+1;i++) result+="\t";
+                result += v.tokenValue.content+" at "+v.tokenValue.source.stringify()+"\n";
+
+                result += stringify(*v.inner, intend+1)+"\n";
                 for(int i=0;i!=intend;i++) result+="\t";
                 return result + "}";
             },

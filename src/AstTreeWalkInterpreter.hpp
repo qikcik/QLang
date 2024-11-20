@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cmath>
+#include <regex>
 #include <sstream>
 
 #include "AstNode.hpp"
@@ -24,6 +25,7 @@ namespace TemporaryVariable
     float getFloat(Any& in);
     int getInteger(Any& in);
     bool getBool(Any& in);
+    std::string getString(Any& in);
 }
 
 std::ostream& operator<<(std::ostream& os, const TemporaryVariable::Any& in)
@@ -46,6 +48,30 @@ float TemporaryVariable::getFloat(TemporaryVariable::Any& in)
     }
     if(in|vx::is<Float>)
         return (in|vx::as<Float>).value;
+
+    std::cout << "unsupported conversion to Float from:'" << in << "'\n";
+    throw std::runtime_error("conversion error");
+}
+
+std::string TemporaryVariable::getString(TemporaryVariable::Any& in)
+{
+    if(in|vx::is<Integer>)
+    {
+        std::cout << "WRN: context required conversion to String from " << in << "'\n";
+        return std::to_string((in|vx::as<Integer>).value);
+    }
+    if(in|vx::is<Bool>)
+    {
+        std::cout << "WRN: context required conversion to String from " << in << "'\n";
+        return (in|vx::as<Bool>).value ? "true" : "false";
+    }
+    if(in|vx::is<Float>)
+    {
+        std::cout << "WRN: context required conversion to String from " << in << "'\n";
+        return std::to_string((in|vx::as<Float>).value);
+    }
+    if(in|vx::is<String>)
+        return (in|vx::as<String>).value;
 
     std::cout << "unsupported conversion to Float from:'" << in << "'\n";
     throw std::runtime_error("conversion error");
@@ -74,6 +100,11 @@ bool TemporaryVariable::getBool(TemporaryVariable::Any& in)
     throw std::runtime_error("conversion error");
 }
 
+template <typename T>
+concept hasTokenValue = requires(T t)
+{
+    {t.tokenValue} -> std::convertible_to<LexToken::Any>;
+};
 
 TemporaryVariable::Any treeWallInterpret(AstNode::Any& in)
 {
@@ -88,6 +119,10 @@ TemporaryVariable::Any treeWallInterpret(AstNode::Any& in)
     else if (in |vx::is<AstNode::Bool>)
     {
         return TemporaryVariable::Bool{(in|vx::as<AstNode::Bool>).tokenValue.content == "true"};
+    }
+    else if (in |vx::is<AstNode::String>)
+    {
+        return TemporaryVariable::String{(in|vx::as<AstNode::String>).tokenValue.content};
     }
     else if (in |vx::is<AstNode::UnaryOp>)
     {
@@ -224,6 +259,16 @@ TemporaryVariable::Any treeWallInterpret(AstNode::Any& in)
             if(v.tokenValue.content == "^")
                 return TemporaryVariable::Float{std::pow(TemporaryVariable::getFloat(left),TemporaryVariable::getFloat(right))};
         }
+        if((left |vx::is<TemporaryVariable::String> || right |vx::is<TemporaryVariable::String>) )
+        {
+            if(v.tokenValue.content == "==")
+                return TemporaryVariable::Bool{TemporaryVariable::getString(left) == TemporaryVariable::getString(right)};
+            if(v.tokenValue.content == "!=")
+                return TemporaryVariable::Bool{TemporaryVariable::getString(left) != TemporaryVariable::getString(right)};
+
+            if(v.tokenValue.content == "+")
+                return TemporaryVariable::String{TemporaryVariable::getString(left) + TemporaryVariable::getString(right)};
+        }
 
         std::cout << "unsupported operation:'" << v.tokenValue.content << "' between left:'" << left << "' and right:'" << right << "'\n";
         std::cout << v.tokenValue.source.printHint()  << "here \n";
@@ -231,11 +276,43 @@ TemporaryVariable::Any treeWallInterpret(AstNode::Any& in)
         std::cout << "right: " << AstNode::stringify(*v.right) << '\n';
         throw std::runtime_error("");
     }
+    else if (in |vx::is<AstNode::Block>)
+    {
+        auto& v = in|vx::as<AstNode::Block>;
+        for(auto& it : v.statements)
+        {
+            treeWallInterpret(*it);
+        }
+        return {}; // TODO
+    }
+    else if (in |vx::is<AstNode::PrintStmt>)
+    {
+        auto& v = in|vx::as<AstNode::PrintStmt>;
+        auto inner = treeWallInterpret(*v.inner);
+        inner |vx::match {
+            [&in](const TemporaryVariable::Bool& v)       { std::cout << (v.value ? "true" : "false") ;},
+            [&in](const TemporaryVariable::Integer& v)    { std::cout <<  v.value;},
+            [&in](const TemporaryVariable::Float& v)      { std::cout <<  v.value;},
+            [&in](const TemporaryVariable::String& v)
+            {
+                std::cout <<  std::regex_replace(v.value, std::regex(R"(\\n)"), "\n");
+            }
+        };
+        return {}; // TODO
+    }
+
 
     std::cout << "unable to execute '" << in << "'\n";
     std::visit([](auto& v)
     {
-        std::cout << v.tokenValue.source.printHint()  << "here \n";
+        if constexpr (hasTokenValue<decltype(v)>)
+        {
+            std::cout << v.tokenValue.source.printHint()  << "here \n";
+        }
+        else
+        {
+            std::cout << "couldn't find tokenValue \n";
+        }
     },in);
     throw std::runtime_error("interpreting error");
 }

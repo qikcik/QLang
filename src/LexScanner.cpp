@@ -110,8 +110,8 @@ bool LexScanner::tryTokenizeString()
 {
     if(source->content[positionIdx] != '"') return false;
 
-    auto beginIdx = positionIdx;
     positionIdx++;
+    auto beginIdx = positionIdx;
 
     while(source->content[positionIdx] != '\0')
     {
@@ -124,7 +124,7 @@ bool LexScanner::tryTokenizeString()
         positionIdx++;
     }
     positionIdx++; // escape string
-    currentToken = LexToken::String{makeSource(beginIdx),source->content.substr(beginIdx,positionIdx-beginIdx)};
+    currentToken = LexToken::String{makeSource(beginIdx),source->content.substr(beginIdx,positionIdx-beginIdx-1)};
     return true;
 }
 

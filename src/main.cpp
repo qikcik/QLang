@@ -38,12 +38,13 @@ int main()
 
             std::cout << "\nAST: \n";
             scanner.restart();
-            auto root = AstParser(scanner).expr();
+            auto root = AstParser(scanner).block();
             std::cout << *root << "\n";
 
             std::cout << "\nINTERPRET: \n";
 
-            std::cout << treeWallInterpret(*root) << "\n";
+            treeWallInterpret(*root);
+            std::cout << "\n";
         }
         catch(std::exception& e)
         {

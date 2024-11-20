@@ -44,13 +44,13 @@ public:
             }
             else
             {
-                std::cout << "\nCRITICAL PARSER ERROR: expected closing parentheses, opened " << LexToken::printHint(*open) << "not found closing ')'" << std::endl;
+                std::cout << "\nCRITICAL INTERPRETER ERROR: expected closing parentheses, opened " << LexToken::printHint(*open) << " not found closing ')'" << std::endl;
                 throw std::runtime_error("");
             }
 
             return e;
         }
-        std::cout << "\nCRITICAL PARSER ERROR: couldn't parse as primary " << (scanner.current() ? LexToken::printHint(*scanner.current()) : "'in the end of file'") << "unexpected token" << std::endl;
+        std::cout << "\nCRITICAL INTERPRETER ERROR: couldn't parse as primary " << (scanner.current() ? LexToken::printHint(*scanner.current()) : "'in the end of file'") << " unexpected token" << std::endl;
         throw std::runtime_error("");
     }
 
@@ -164,6 +164,31 @@ public:
     std::unique_ptr<AstNode::Any> expr()
     {
         return logic();
+    }
+
+    //<stmt> ::= <expr>
+    std::unique_ptr<AstNode::Any> stmt()
+    {
+        if (auto t= scanner.currentMath<LexToken::Label>("print") )
+        {
+            scanner.next();
+            auto e = std::move(expr());
+            return std::make_unique<AstNode::Any>(AstNode::PrintStmt{*t,std::move(e)});
+        }
+
+        std::cout << "\nCRITICAL INTERPRET ERROR: couldn't parse as stmt " << (scanner.current() ? LexToken::printHint(*scanner.current()) : "'in the end of file'") << " unexpected token" << std::endl;
+        throw std::runtime_error("");
+    }
+
+    //<block> ::= <stmt>*
+    std::unique_ptr<AstNode::Any> block()
+    {
+        std::vector<std::unique_ptr<AstNode::Any>> statements;
+        while (scanner.current())
+        {
+            statements.push_back(std::move(stmt()));
+        }
+        return std::make_unique<AstNode::Any>(AstNode::Block{std::move(statements)});
     }
 
 protected:
