@@ -184,7 +184,25 @@ public:
     std::unique_ptr<AstNode::Any> block()
     {
         std::vector<std::unique_ptr<AstNode::Any>> statements;
-        while (scanner.current())
+        if (auto t= scanner.currentMath<LexToken::Separator>("{") )
+        {
+            scanner.next();
+
+            while (scanner.current() && !scanner.currentMath<LexToken::Separator>("}"))
+            {
+                statements.push_back(std::move(stmt()));
+            }
+            if (scanner.currentMath<LexToken::Separator>("}") )
+            {
+                scanner.next();
+            }
+            else
+            {
+                std::cout << "\nCRITICAL INTERPRETER ERROR: expected closing parentheses, opened " << LexToken::printHint(*t) << " not found closing '}'" << std::endl;
+                throw std::runtime_error("");
+            }
+        }
+        else
         {
             statements.push_back(std::move(stmt()));
         }
