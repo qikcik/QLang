@@ -11,9 +11,9 @@ namespace AstNode
 {
     struct Literal {}; struct Integer; struct Float; struct String; struct Bool;
     struct Operation {}; struct UnaryOp; struct BinaryOp;
-    struct Stmt {}; struct Block; struct PrintStmt;
+    struct Stmt {}; struct Block; struct PrintStmt; struct IfStmt;
 
-    using Any = std::variant<Integer,Float,String,Bool,UnaryOp,BinaryOp,Block,PrintStmt>;
+    using Any = std::variant<Integer,Float,String,Bool,UnaryOp,BinaryOp,Block,PrintStmt,IfStmt>;
 
     struct Integer : public Literal
     {
@@ -67,6 +67,23 @@ namespace AstNode
         PrintStmt(const LexToken::Label& inOp,std::unique_ptr<AstNode::Any> inInner) : tokenValue(inOp), inner(std::move(inInner)) {};
         LexToken::Label tokenValue;
         std::unique_ptr<AstNode::Any> inner;
+    };
+
+    struct IfStmt final : public Stmt
+    {
+        IfStmt(const LexToken::Label& inOp,
+                std::unique_ptr<AstNode::Any> when,
+                std::unique_ptr<AstNode::Any> then,
+                std::unique_ptr<AstNode::Any> elseThen)
+        : tokenValue(inOp),
+            when(std::move(when)),
+            then(std::move(then)),
+            elseThen(std::move(elseThen)) {};
+
+        LexToken::Label tokenValue;
+        std::unique_ptr<AstNode::Any> when;
+        std::unique_ptr<AstNode::Any> then;
+        std::unique_ptr<AstNode::Any> elseThen;
     };
 
     std::string stringify(const AstNode::Any& in, int intend = 0)
@@ -124,6 +141,20 @@ namespace AstNode
                 result += v.tokenValue.content+" at "+v.tokenValue.source.stringify()+"\n";
 
                 result += stringify(*v.inner, intend+1)+"\n";
+                for(int i=0;i!=intend;i++) result+="\t";
+                return result + "}";
+            },
+            [&in,intend](const AstNode::IfStmt& v)
+            {
+                std::string result = "IfStmt{\n";
+
+                for(int i=0;i!=intend+1;i++) result+="\t";
+                result += v.tokenValue.content+" at "+v.tokenValue.source.stringify()+"\n";
+
+                result += stringify(*v.when, intend+1)+",\n";
+                result += stringify(*v.then, intend+1)+"\n";
+                if(v.elseThen)
+                    result += stringify(*v.elseThen, intend+1)+"\n";
                 for(int i=0;i!=intend;i++) result+="\t";
                 return result + "}";
             },

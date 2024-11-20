@@ -279,11 +279,14 @@ TemporaryVariable::Any treeWallInterpret(AstNode::Any& in)
     else if (in |vx::is<AstNode::Block>)
     {
         auto& v = in|vx::as<AstNode::Block>;
-        for(auto& it : v.statements)
+        if(v.statements.size() >= 1)
         {
-            treeWallInterpret(*it);
+            for(int i = 0; i != v.statements.size()-1; i++)
+            {
+                treeWallInterpret(*v.statements[i]);
+            }
+            return treeWallInterpret(*v.statements[v.statements.size()-1]);
         }
-        return {}; // TODO
     }
     else if (in |vx::is<AstNode::PrintStmt>)
     {
@@ -298,7 +301,22 @@ TemporaryVariable::Any treeWallInterpret(AstNode::Any& in)
                 std::cout <<  std::regex_replace(v.value, std::regex(R"(\\n)"), "\n");
             }
         };
-        return {}; // TODO
+        return inner;
+    }
+    else if (in |vx::is<AstNode::IfStmt>)
+    {
+        auto& v = in|vx::as<AstNode::IfStmt>;
+        auto when = treeWallInterpret(*v.when);
+
+        if(TemporaryVariable::getBool(when))
+        {
+            return treeWallInterpret(*v.then);
+        }
+        if(v.elseThen)
+        {
+            return treeWallInterpret(*v.elseThen);
+        }
+        return {};
     }
 
 

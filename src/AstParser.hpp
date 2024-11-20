@@ -166,7 +166,7 @@ public:
         return logic();
     }
 
-    //<stmt> ::= <expr>
+    //<stmt> ::= 'print' <expr> | 'if' <expr> <stmt> ( 'else' <stmt> )? '{' <stmt>* '}'
     std::unique_ptr<AstNode::Any> stmt()
     {
         if (auto t= scanner.currentMath<LexToken::Label>("print") )
@@ -174,6 +174,36 @@ public:
             scanner.next();
             auto e = std::move(expr());
             return std::make_unique<AstNode::Any>(AstNode::PrintStmt{*t,std::move(e)});
+        }
+        if (auto t= scanner.currentMath<LexToken::Label>("if") )
+        {
+            scanner.next();
+            auto ex = std::move(expr());
+            auto st = std::move(stmt());
+
+            if (auto el = scanner.currentMath<LexToken::Label>("else") )
+            {
+                scanner.next();
+                auto elSt = std::move(stmt());
+                return std::make_unique<AstNode::Any>(AstNode::IfStmt{*t,std::move(ex),std::move(st),std::move(elSt)});
+            }
+            return std::make_unique<AstNode::Any>(AstNode::IfStmt{*t,std::move(ex),std::move(st),nullptr});
+        }
+        if (auto t= scanner.currentMath<LexToken::Separator>("{") )
+        {
+            scanner.next();
+            std::vector<std::unique_ptr<AstNode::Any>> statements;
+            while (scanner.current() && !scanner.currentMath<LexToken::Separator>("}"))
+            {
+                statements.push_back(std::move(stmt()));
+            }
+            if (scanner.currentMath<LexToken::Separator>("}") )
+            {
+                scanner.next();
+                return std::make_unique<AstNode::Any>(AstNode::Block{std::move(statements)});
+            }
+            std::cout << "\nCRITICAL INTERPRETER ERROR: expected closing parentheses, opened " << LexToken::printHint(*t) << " not found closing '}'" << std::endl;
+            throw std::runtime_error("");
         }
 
         std::cout << "\nCRITICAL INTERPRET ERROR: couldn't parse as stmt " << (scanner.current() ? LexToken::printHint(*scanner.current()) : "'in the end of file'") << " unexpected token" << std::endl;
@@ -184,28 +214,12 @@ public:
     std::unique_ptr<AstNode::Any> block()
     {
         std::vector<std::unique_ptr<AstNode::Any>> statements;
-        if (auto t= scanner.currentMath<LexToken::Separator>("{") )
-        {
-            scanner.next();
 
-            while (scanner.current() && !scanner.currentMath<LexToken::Separator>("}"))
-            {
-                statements.push_back(std::move(stmt()));
-            }
-            if (scanner.currentMath<LexToken::Separator>("}") )
-            {
-                scanner.next();
-            }
-            else
-            {
-                std::cout << "\nCRITICAL INTERPRETER ERROR: expected closing parentheses, opened " << LexToken::printHint(*t) << " not found closing '}'" << std::endl;
-                throw std::runtime_error("");
-            }
-        }
-        else
+        while (scanner.current() && !scanner.currentMath<LexToken::Separator>("}"))
         {
             statements.push_back(std::move(stmt()));
         }
+
         return std::make_unique<AstNode::Any>(AstNode::Block{std::move(statements)});
     }
 
