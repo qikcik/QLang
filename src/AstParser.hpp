@@ -208,6 +208,13 @@ public:
             }
             return std::make_unique<AstNode::Any>(AstNode::IfStmt{*t,std::move(ex),std::move(st),nullptr});
         }
+        else if (auto t= scanner.currentMath<LexToken::Label>("while") )
+        {
+            scanner.next();
+            auto until = std::move(expr());
+            auto loop = std::move(stmt());
+            return std::make_unique<AstNode::Any>(AstNode::WhileStmt{*t,std::move(until),std::move(loop)});
+        }
         else if (auto t= scanner.current<LexToken::Label>() ) // <assigment>
         {
             auto id = std::move(identifier());

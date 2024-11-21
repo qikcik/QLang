@@ -265,6 +265,26 @@ TemporaryValue::Any treeWallInterpret(AstNode::Any& in,std::unique_ptr<RuntimeSc
 
         return value;
     }
+    else if (in |vx::is<AstNode::WhileStmt>)
+    {
+        auto& v = in|vx::as<AstNode::WhileStmt>;
+        RuntimeScope::addNew(&scope);
+
+        TemporaryValue::Any ret = TemporaryValue::Bool{false};
+
+        const int MAX_ITERATION = 100000;
+        for(int i = 0; i!= MAX_ITERATION; i++) //max iteration
+        {
+            auto until = treeWallInterpret(*v.until,scope);
+            if(TemporaryValue::getBool(until))
+            {
+                ret = treeWallInterpret(*v.loop,scope,true);
+            }
+        }
+
+        RuntimeScope::removeLast(&scope);
+        return ret;
+    }
 
 
     std::cout << "unable to execute '" << in << "'\n";

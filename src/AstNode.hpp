@@ -12,9 +12,9 @@ namespace AstNode
     struct Identifier;
     struct Literal {}; struct Integer; struct Float; struct String; struct Bool;
     struct Operation {}; struct UnaryOp; struct BinaryOp;
-    struct Stmt {}; struct Block; struct PrintStmt; struct IfStmt; struct AssignStmt;
+    struct Stmt {}; struct Block; struct PrintStmt; struct IfStmt; struct AssignStmt; struct WhileStmt;
 
-    using Any = std::variant<Identifier,Integer,Float,String,Bool,UnaryOp,BinaryOp,Block,PrintStmt,IfStmt,AssignStmt>;
+    using Any = std::variant<Identifier,Integer,Float,String,Bool,UnaryOp,BinaryOp,Block,PrintStmt,IfStmt,AssignStmt,WhileStmt>;
 
     struct Identifier final
     {
@@ -106,6 +106,20 @@ namespace AstNode
         std::unique_ptr<AstNode::Any> value;
     };
 
+    struct WhileStmt final : public Stmt
+    {
+        WhileStmt(const LexToken::Label& inOp,
+                std::unique_ptr<AstNode::Any> until,
+                std::unique_ptr<AstNode::Any> loop)
+        : tokenValue(inOp),
+            until(std::move(until)),
+            loop(std::move(loop)) {};
+
+        LexToken::Label tokenValue;
+        std::unique_ptr<AstNode::Any> until;
+        std::unique_ptr<AstNode::Any> loop;
+    };
+
     std::string stringify(const AstNode::Any& in, int intend = 0)
     {
         std::string result;
@@ -189,6 +203,18 @@ namespace AstNode
 
                 result += stringify(v.identifier, intend+1)+",\n";
                 result += stringify(*v.value, intend+1)+"\n";
+                for(int i=0;i!=intend;i++) result+="\t";
+                return result + "}";
+            },
+            [&in,intend](const AstNode::WhileStmt& v)
+            {
+                std::string result = "WhileStmt{\n";
+
+                for(int i=0;i!=intend+1;i++) result+="\t";
+                result += v.tokenValue.content+" at "+v.tokenValue.source.stringify()+"\n";
+
+                result += stringify(*v.until, intend+1)+",\n";
+                result += stringify(*v.loop, intend+1)+"\n";
                 for(int i=0;i!=intend;i++) result+="\t";
                 return result + "}";
             },
