@@ -9,11 +9,18 @@
 
 namespace AstNode
 {
+    struct Identifier;
     struct Literal {}; struct Integer; struct Float; struct String; struct Bool;
     struct Operation {}; struct UnaryOp; struct BinaryOp;
-    struct Stmt {}; struct Block; struct PrintStmt; struct IfStmt;
+    struct Stmt {}; struct Block; struct PrintStmt; struct IfStmt; struct AssignStmt;
 
-    using Any = std::variant<Integer,Float,String,Bool,UnaryOp,BinaryOp,Block,PrintStmt,IfStmt>;
+    using Any = std::variant<Identifier,Integer,Float,String,Bool,UnaryOp,BinaryOp,Block,PrintStmt,IfStmt,AssignStmt>;
+
+    struct Identifier final
+    {
+        explicit Identifier(const LexToken::Label& inValue) : tokenValue(inValue) {};
+        LexToken::Label tokenValue;
+    };
 
     struct Integer : public Literal
     {
@@ -38,7 +45,6 @@ namespace AstNode
         explicit String(const LexToken::String& inValue) : tokenValue(inValue) {};
         LexToken::String tokenValue;
     };
-
 
     struct UnaryOp final : public Operation
     {
@@ -86,12 +92,28 @@ namespace AstNode
         std::unique_ptr<AstNode::Any> elseThen;
     };
 
+    struct AssignStmt final : public Stmt
+    {
+        AssignStmt(const LexToken::Separator& inOp,
+                AstNode::Identifier inIdentifier,
+                std::unique_ptr<AstNode::Any> inValue)
+        : tokenValue(inOp),
+            identifier(std::move(inIdentifier)),
+            value(std::move(inValue)) {};
+
+        LexToken::Separator tokenValue;
+        AstNode::Identifier identifier;
+        std::unique_ptr<AstNode::Any> value;
+    };
+
     std::string stringify(const AstNode::Any& in, int intend = 0)
     {
         std::string result;
         for(int i=0;i!=intend;i++) result+="\t";
 
         result += in |vx::match {
+            [&in](const AstNode::Identifier& v)
+                { return "Identifier{"+v.tokenValue.content+"} at "+v.tokenValue.source.stringify(); },
             [&in](const AstNode::Integer& v)
                 { return "Integer{"+std::to_string(v.tokenValue.content)+"} at "+v.tokenValue.source.stringify(); },
             [&in](const AstNode::Float& v)
@@ -155,6 +177,18 @@ namespace AstNode
                 result += stringify(*v.then, intend+1)+"\n";
                 if(v.elseThen)
                     result += stringify(*v.elseThen, intend+1)+"\n";
+                for(int i=0;i!=intend;i++) result+="\t";
+                return result + "}";
+            },
+            [&in,intend](const AstNode::AssignStmt& v)
+            {
+                std::string result = "AssignStmt{\n";
+
+                for(int i=0;i!=intend+1;i++) result+="\t";
+                result += v.tokenValue.content+" at "+v.tokenValue.source.stringify()+"\n";
+
+                result += stringify(v.identifier, intend+1)+",\n";
+                result += stringify(*v.value, intend+1)+"\n";
                 for(int i=0;i!=intend;i++) result+="\t";
                 return result + "}";
             },

@@ -10,7 +10,20 @@ class AstParser
 public:
     explicit AstParser(LexScanner& inScanner) : scanner(inScanner) {};
 
-    //<primary> ::= <integer> | <float> | <string> |  <bool> as ('true'|'false') | '(' <expr> ')'
+    //<identifier>
+    std::unique_ptr<AstNode::Any> identifier()
+    {
+        if(const auto v = scanner.current<LexToken::Label>())
+        {
+            scanner.next();
+            return std::make_unique<AstNode::Any>( AstNode::Identifier{*v} );
+        }
+
+        std::cout << "\nCRITICAL INTERPRETER ERROR: couldn't parse as identifier " << (scanner.current() ? LexToken::printHint(*scanner.current()) : "'in the end of file'") << " unexpected token" << std::endl;
+        throw std::runtime_error("");
+    }
+
+    //<primary> ::= <identifier> | <integer> | <float> | <string> |  <bool> as ('true'|'false') | '(' <expr> ')'
     std::unique_ptr<AstNode::Any> primary()
     {
         if(const auto v = scanner.current<LexToken::Integer>())
@@ -28,12 +41,18 @@ public:
             scanner.next();
             return std::make_unique<AstNode::Any>( AstNode::String{*v} );
         }
+
         if(scanner.currentMath<LexToken::Label>("true") || scanner.currentMath<LexToken::Label>("false"))
         {
             const auto v = *scanner.current<LexToken::Label>();
             scanner.next();
             return std::make_unique<AstNode::Any>( AstNode::Bool{v} );
         }
+        else if(scanner.current<LexToken::Label>())
+        {
+            return std::move(identifier());
+        }
+
         if(auto open = scanner.currentMath<LexToken::Separator>("("))
         {
             scanner.next();
@@ -166,7 +185,7 @@ public:
         return logic();
     }
 
-    //<stmt> ::= 'print' <expr> | 'if' <expr> <stmt> ( 'else' <stmt> )? '{' <stmt>* '}'
+    //<stmt> ::= 'print' <expr> | 'if' <expr> <stmt> ( 'else' <stmt> )? | <identifier> := <expr> | '{' <stmt>* '}'
     std::unique_ptr<AstNode::Any> stmt()
     {
         if (auto t= scanner.currentMath<LexToken::Label>("print") )
@@ -175,7 +194,7 @@ public:
             auto e = std::move(expr());
             return std::make_unique<AstNode::Any>(AstNode::PrintStmt{*t,std::move(e)});
         }
-        if (auto t= scanner.currentMath<LexToken::Label>("if") )
+        else if (auto t= scanner.currentMath<LexToken::Label>("if") )
         {
             scanner.next();
             auto ex = std::move(expr());
@@ -189,6 +208,23 @@ public:
             }
             return std::make_unique<AstNode::Any>(AstNode::IfStmt{*t,std::move(ex),std::move(st),nullptr});
         }
+        else if (auto t= scanner.current<LexToken::Label>() ) // <assigment>
+        {
+            auto id = std::move(identifier());
+
+            auto el = scanner.currentMath<LexToken::Separator>(":=");
+            if (!el)
+            {
+                std::cout << "\nCRITICAL INTERPRETER ERROR: expected assing operator " << (scanner.current() ? LexToken::printHint(*scanner.current()) : "end of file") << " not found ':='" << std::endl;
+                throw std::runtime_error("");
+            }
+            scanner.next();
+
+            auto ex = std::move(expr());
+
+            return std::make_unique<AstNode::Any>(AstNode::AssignStmt{*el,*id|vx::as<AstNode::Identifier>,std::move(ex)});
+        }
+
         if (auto t= scanner.currentMath<LexToken::Separator>("{") )
         {
             scanner.next();

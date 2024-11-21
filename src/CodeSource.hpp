@@ -12,17 +12,19 @@ struct CodeSource
         std::string linePrefix = std::to_string(line) + "] ";
         size_t currentLine = 1;
         size_t startChar = 0;
-        for(size_t i = 0; i < content.size(); i++)
-        {
-            if(content[i] == '\n')
-                currentLine++;
 
-            if(currentLine == line)
+        if (line > 1)
+            for(size_t i = 0; i < content.size(); i++)
             {
-                startChar = i+1;
-                break;
+                if(content[i] == '\n')
+                    currentLine++;
+
+                if(currentLine == line)
+                {
+                    startChar = i+1;
+                    break;
+                }
             }
-        }
 
         std::string result= "in <"+name+">:"+std::to_string(line)+":"+std::to_string(character)+"\n"+linePrefix;
         for(size_t i = startChar; i < content.size(); i++)

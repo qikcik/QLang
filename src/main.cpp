@@ -16,6 +16,8 @@
 
 int main()
 {
+    auto rootScope = std::make_unique<RuntimeScope>(nullptr);
+
     while(true)
     {
         std::shared_ptr<CodeSource> source = std::make_shared<CodeSource>("repl");
@@ -41,7 +43,7 @@ int main()
 
         try
         {
-            LexScanner scanner(source,{"+","-","*","^","/","(",")","==","!=","<",">","<=",">=","!","&&","||","{","}"});
+            LexScanner scanner(source,{"+","-","*","^","/","(",")","==","!=","<",">","<=",">=","!","&&","||","{","}",":="});
 
             std::cout << "TOKEKNS: \n";
             while ( scanner.current())
@@ -57,7 +59,9 @@ int main()
 
             std::cout << "\nINTERPRET: \n";
 
-            treeWallInterpret(*root);
+
+            treeWallInterpret(*root,rootScope);
+
             std::cout << "\n";
         }
         catch(std::exception& e)
