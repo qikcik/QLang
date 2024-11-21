@@ -60,7 +60,7 @@ int main()
             std::cout << "\nINTERPRET: \n";
 
 
-            treeWallInterpret(*root,rootScope);
+            treeWallInterpret(*root,rootScope,true);
 
             std::cout << "\n";
         }

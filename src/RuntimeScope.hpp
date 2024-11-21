@@ -24,4 +24,7 @@ struct RuntimeScope
 
     std::map<std::string,TemporaryValue::Any> variables {};
     std::unique_ptr<RuntimeScope> parent;
+
+    static void addNew(std::unique_ptr<RuntimeScope>* in);
+    static void removeLast(std::unique_ptr<RuntimeScope>* in);
 };

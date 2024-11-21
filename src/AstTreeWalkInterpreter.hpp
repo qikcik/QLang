@@ -14,7 +14,7 @@ concept hasTokenValue = requires(T t)
     {t.tokenValue} -> std::convertible_to<LexToken::Any>;
 };
 
-TemporaryValue::Any treeWallInterpret(AstNode::Any& in,std::unique_ptr<RuntimeScope>& scope)
+TemporaryValue::Any treeWallInterpret(AstNode::Any& in,std::unique_ptr<RuntimeScope>& scope,bool preventNewScopeFromBlock = false)
 {
     if (in |vx::is<AstNode::Float>)
     {
@@ -193,7 +193,7 @@ TemporaryValue::Any treeWallInterpret(AstNode::Any& in,std::unique_ptr<RuntimeSc
     }
     else if (in |vx::is<AstNode::Block>)
     {
-        scope = std::make_unique<RuntimeScope>(std::move(scope));
+        if(!preventNewScopeFromBlock) RuntimeScope::addNew(&scope);
         auto& v = in|vx::as<AstNode::Block>;
         if(v.statements.size() >= 1)
         {
@@ -201,7 +201,9 @@ TemporaryValue::Any treeWallInterpret(AstNode::Any& in,std::unique_ptr<RuntimeSc
             {
                 treeWallInterpret(*v.statements[i],scope);
             }
-            return treeWallInterpret(*v.statements[v.statements.size()-1],scope);
+            auto ret =  treeWallInterpret(*v.statements[v.statements.size()-1],scope);
+            if(!preventNewScopeFromBlock) RuntimeScope::removeLast(&scope);
+            return ret;
         }
     }
     else if (in |vx::is<AstNode::PrintStmt>)
@@ -226,11 +228,17 @@ TemporaryValue::Any treeWallInterpret(AstNode::Any& in,std::unique_ptr<RuntimeSc
 
         if(TemporaryValue::getBool(when))
         {
-            return treeWallInterpret(*v.then,scope);
+            RuntimeScope::addNew(&scope);
+            auto ret = treeWallInterpret(*v.then,scope,true);
+            RuntimeScope::removeLast(&scope);
+            return ret;
         }
         if(v.elseThen)
         {
-            return treeWallInterpret(*v.elseThen,scope);
+            RuntimeScope::addNew(&scope);
+            auto ret = treeWallInterpret(*v.elseThen,scope,true);
+            RuntimeScope::removeLast(&scope);
+            return ret;
         }
         return {};
     }
