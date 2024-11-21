@@ -12,9 +12,9 @@ namespace AstNode
     struct Identifier;
     struct Literal {}; struct Integer; struct Float; struct String; struct Bool;
     struct Operation {}; struct UnaryOp; struct BinaryOp;
-    struct Stmt {}; struct Block; struct PrintStmt; struct IfStmt; struct AssignStmt; struct WhileStmt;
+    struct Stmt {}; struct Block; struct PrintStmt; struct IfStmt; struct AssignStmt; struct WhileStmt; struct ForStmt;
 
-    using Any = std::variant<Identifier,Integer,Float,String,Bool,UnaryOp,BinaryOp,Block,PrintStmt,IfStmt,AssignStmt,WhileStmt>;
+    using Any = std::variant<Identifier,Integer,Float,String,Bool,UnaryOp,BinaryOp,Block,PrintStmt,IfStmt,AssignStmt,WhileStmt,ForStmt>;
 
     struct Identifier final
     {
@@ -120,6 +120,26 @@ namespace AstNode
         std::unique_ptr<AstNode::Any> loop;
     };
 
+    struct ForStmt final : public Stmt
+    {
+        ForStmt(const LexToken::Label& inOp,
+                std::unique_ptr<AstNode::Any> doOnce,
+                std::unique_ptr<AstNode::Any> until,
+                std::unique_ptr<AstNode::Any> afterIter,
+                std::unique_ptr<AstNode::Any> loop)
+        : tokenValue(inOp),
+            doOnce(std::move(doOnce)),
+            until(std::move(until)),
+            afterIter(std::move(afterIter)),
+            loop(std::move(loop)){};
+
+        LexToken::Label tokenValue;
+        std::unique_ptr<AstNode::Any> doOnce;
+        std::unique_ptr<AstNode::Any> until;
+        std::unique_ptr<AstNode::Any> afterIter;
+        std::unique_ptr<AstNode::Any> loop;
+    };
+
     std::string stringify(const AstNode::Any& in, int intend = 0)
     {
         std::string result;
@@ -214,6 +234,20 @@ namespace AstNode
                 result += v.tokenValue.content+" at "+v.tokenValue.source.stringify()+"\n";
 
                 result += stringify(*v.until, intend+1)+",\n";
+                result += stringify(*v.loop, intend+1)+"\n";
+                for(int i=0;i!=intend;i++) result+="\t";
+                return result + "}";
+            },
+            [&in,intend](const AstNode::ForStmt& v)
+            {
+                std::string result = "ForStmt{\n";
+
+                for(int i=0;i!=intend+1;i++) result+="\t";
+                result += v.tokenValue.content+" at "+v.tokenValue.source.stringify()+"\n";
+
+                result += stringify(*v.doOnce, intend+1)+",\n";
+                result += stringify(*v.until, intend+1)+"\n";
+                result += stringify(*v.afterIter, intend+1)+"\n";
                 result += stringify(*v.loop, intend+1)+"\n";
                 for(int i=0;i!=intend;i++) result+="\t";
                 return result + "}";

@@ -16,6 +16,8 @@ concept hasTokenValue = requires(T t)
 
 TemporaryValue::Any treeWallInterpret(AstNode::Any& in,std::unique_ptr<RuntimeScope>& scope,bool preventNewScopeFromBlock = false)
 {
+    const int MAX_LOOP_ITERATION = 100000;
+
     if (in |vx::is<AstNode::Float>)
     {
         return TemporaryValue::Float{(in|vx::as<AstNode::Float>).tokenValue.content};
@@ -272,14 +274,39 @@ TemporaryValue::Any treeWallInterpret(AstNode::Any& in,std::unique_ptr<RuntimeSc
 
         TemporaryValue::Any ret = TemporaryValue::Bool{false};
 
-        const int MAX_ITERATION = 100000;
-        for(int i = 0; i!= MAX_ITERATION; i++) //max iteration
+        for(int i = 0; i!= MAX_LOOP_ITERATION; i++) //max iteration
         {
             auto until = treeWallInterpret(*v.until,scope);
             if(TemporaryValue::getBool(until))
             {
                 ret = treeWallInterpret(*v.loop,scope,true);
+                continue;
             }
+            break;
+        }
+
+        RuntimeScope::removeLast(&scope);
+        return ret;
+    }
+    else if (in |vx::is<AstNode::ForStmt>)
+    {
+        auto& v = in|vx::as<AstNode::ForStmt>;
+        RuntimeScope::addNew(&scope);
+
+        treeWallInterpret(*v.doOnce,scope,true);
+
+        TemporaryValue::Any ret = TemporaryValue::Bool{false};
+
+        for(int i = 0; i!= MAX_LOOP_ITERATION; i++) //max iteration
+        {
+            auto until = treeWallInterpret(*v.until,scope);
+            if(TemporaryValue::getBool(until))
+            {
+                ret = treeWallInterpret(*v.loop,scope,true);
+                treeWallInterpret(*v.afterIter,scope,true);
+                continue;
+            }
+            break;
         }
 
         RuntimeScope::removeLast(&scope);

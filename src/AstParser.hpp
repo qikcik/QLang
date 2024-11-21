@@ -185,7 +185,30 @@ public:
         return logic();
     }
 
-    //<stmt> ::= 'print' <expr> | 'if' <expr> <stmt> ( 'else' <stmt> )? | <identifier> := <expr> | '{' <stmt>* '}'
+    //<assigment> ::= <identifier> ':=' <expr>
+    std::unique_ptr<AstNode::Any> assigment()
+    {
+        if (auto t= scanner.current<LexToken::Label>() ) // <assigment>
+        {
+            auto id = std::move(identifier());
+
+            auto el = scanner.currentMath<LexToken::Separator>(":=");
+            if (!el)
+            {
+                std::cout << "\nCRITICAL INTERPRETER ERROR: expected assing operator " << (scanner.current() ? LexToken::printHint(*scanner.current()) : "end of file") << " not found ':='" << std::endl;
+                throw std::runtime_error("");
+            }
+            scanner.next();
+
+            auto ex = std::move(expr());
+
+            return std::make_unique<AstNode::Any>(AstNode::AssignStmt{*el,*id|vx::as<AstNode::Identifier>,std::move(ex)});
+        }
+        std::cout << "\nCRITICAL INTERPRETER ERROR: couldn't parse as assigment " << (scanner.current() ? LexToken::printHint(*scanner.current()) : "'in the end of file'") << " unexpected token" << std::endl;
+        throw std::runtime_error("");
+    }
+
+    //<stmt> ::= 'print' <expr> | 'if' <expr> <stmt> ( 'else' <stmt> )? | 'while' <expr> <stmt> | 'for' '(' <assigment> ',' <expr> ',' <assigment> ')'  <stmt> | <identifier> := <expr> | '{' <stmt>* '}'
     std::unique_ptr<AstNode::Any> stmt()
     {
         if (auto t= scanner.currentMath<LexToken::Label>("print") )
@@ -215,21 +238,51 @@ public:
             auto loop = std::move(stmt());
             return std::make_unique<AstNode::Any>(AstNode::WhileStmt{*t,std::move(until),std::move(loop)});
         }
-        else if (auto t= scanner.current<LexToken::Label>() ) // <assigment>
+        else if (auto t= scanner.currentMath<LexToken::Label>("for") )
         {
-            auto id = std::move(identifier());
+            scanner.next();
 
-            auto el = scanner.currentMath<LexToken::Separator>(":=");
-            if (!el)
+            if (auto el = scanner.currentMath<LexToken::Separator>("(") ; !el )
             {
-                std::cout << "\nCRITICAL INTERPRETER ERROR: expected assing operator " << (scanner.current() ? LexToken::printHint(*scanner.current()) : "end of file") << " not found ':='" << std::endl;
+                std::cout << "\nCRITICAL INTERPRETER ERROR: expected '(' if for loop statement " << (scanner.current() ? LexToken::printHint(*scanner.current()) : "end of file") << std::endl;
                 throw std::runtime_error("");
             }
             scanner.next();
 
-            auto ex = std::move(expr());
+            auto doOnce = std::move(assigment());
 
-            return std::make_unique<AstNode::Any>(AstNode::AssignStmt{*el,*id|vx::as<AstNode::Identifier>,std::move(ex)});
+            if (auto el = scanner.currentMath<LexToken::Separator>(",") ; !el )
+            {
+                std::cout << "\nCRITICAL INTERPRETER ERROR: expected ',' if for loop statement " << (scanner.current() ? LexToken::printHint(*scanner.current()) : "end of file") << std::endl;
+                throw std::runtime_error("");
+            }
+            scanner.next();
+
+            auto until = std::move(expr());
+
+            if (auto el = scanner.currentMath<LexToken::Separator>(",") ; !el )
+            {
+                std::cout << "\nCRITICAL INTERPRETER ERROR: expected ',' if for loop statement " << (scanner.current() ? LexToken::printHint(*scanner.current()) : "end of file") << std::endl;
+                throw std::runtime_error("");
+            }
+            scanner.next();
+
+            auto after = std::move(assigment());
+
+            if (auto el = scanner.currentMath<LexToken::Separator>(")") ; !el )
+            {
+                std::cout << "\nCRITICAL INTERPRETER ERROR: expected ')' if for loop statement " << (scanner.current() ? LexToken::printHint(*scanner.current()) : "end of file") << std::endl;
+                throw std::runtime_error("");
+            }
+            scanner.next();
+
+            auto st = std::move(stmt());
+
+            return std::make_unique<AstNode::Any>(AstNode::ForStmt{*t,std::move(doOnce),std::move(until),std::move(after),std::move(st)});
+        }
+        else if (auto t= scanner.current<LexToken::Label>() ) // <assigment>
+        {
+            return std::move(assigment());
         }
 
         if (auto t= scanner.currentMath<LexToken::Separator>("{") )

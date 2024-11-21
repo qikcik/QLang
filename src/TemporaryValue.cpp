@@ -32,17 +32,17 @@ std::string TemporaryValue::getString(TemporaryValue::Any& in)
 {
     if(in|vx::is<Integer>)
     {
-        std::cout << "WRN: context required conversion to String from " << in << "'\n";
+        //std::cout << "WRN: context required conversion to String from " << in << "'\n";
         return std::to_string((in|vx::as<Integer>).value);
     }
     if(in|vx::is<Bool>)
     {
-        std::cout << "WRN: context required conversion to String from " << in << "'\n";
+        //std::cout << "WRN: context required conversion to String from " << in << "'\n";
         return (in|vx::as<Bool>).value ? "true" : "false";
     }
     if(in|vx::is<Float>)
     {
-        std::cout << "WRN: context required conversion to String from " << in << "'\n";
+        //std::cout << "WRN: context required conversion to String from " << in << "'\n";
         return std::to_string((in|vx::as<Float>).value);
     }
     if(in|vx::is<String>)
