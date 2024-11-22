@@ -1,81 +1,105 @@
 #pragma once
+
 #include <array>
 #include <memory>
 #include <string>
 
 #include "LexToken.hpp"
-
-
+#include "vx.hpp"
 
 namespace AstNode
 {
     struct Identifier;
-    struct Literal {}; struct Integer; struct Float; struct String; struct Bool;
-    struct Operation {}; struct UnaryOp; struct BinaryOp;
-    struct Stmt {}; struct Block; struct PrintStmt; struct IfStmt; struct AssignStmt; struct WhileStmt; struct ForStmt;
+    struct Integer; struct Float; struct String; struct Bool;
+    struct UnaryOp; struct BinaryOp;
+    struct Block; struct PrintStmt; struct IfStmt; struct AssignStmt; struct WhileStmt; struct ForStmt; struct FunctionDecl; struct FunctionCall;
 
-    using Any = std::variant<Identifier,Integer,Float,String,Bool,UnaryOp,BinaryOp,Block,PrintStmt,IfStmt,AssignStmt,WhileStmt,ForStmt>;
+    using Any = std::variant<Identifier,Integer,Float,String,Bool,UnaryOp,BinaryOp,Block,PrintStmt,IfStmt,AssignStmt,WhileStmt,ForStmt, FunctionDecl,FunctionCall>;
 
-    struct Identifier final
+    struct Base
+    {
+        virtual ~Base() = default;
+        virtual Any copy() const = 0;
+    };
+
+    struct Identifier final : public Base
     {
         explicit Identifier(const LexToken::Label& inValue) : tokenValue(inValue) {};
         LexToken::Label tokenValue;
+
+        Any copy() const override;
     };
 
-    struct Integer : public Literal
+    struct Integer : public Base
     {
         explicit Integer(const LexToken::Integer& inValue) : tokenValue(inValue) {};
         LexToken::Integer tokenValue;
+
+        Any copy() const override;;
     };
 
-    struct Float final : public Literal
+    struct Float final : public Base
     {
         explicit Float(const LexToken::Float& inValue) : tokenValue(inValue) {};
         LexToken::Float tokenValue;
+
+        Any copy() const override;;
     };
 
-    struct Bool final : public Literal
+    struct Bool final : public Base
     {
         explicit Bool(const LexToken::Label& inValue) : tokenValue(inValue) {};
         LexToken::Label tokenValue;
+
+        Any copy() const override;
     };
 
-    struct String final : public Literal
+    struct String final : public Base
     {
         explicit String(const LexToken::String& inValue) : tokenValue(inValue) {};
         LexToken::String tokenValue;
+
+        Any copy() const override;
     };
 
-    struct UnaryOp final : public Operation
+    struct UnaryOp final : public Base
     {
         UnaryOp(const LexToken::Separator& inOp,std::unique_ptr<AstNode::Any> inInner) : tokenValue(inOp), inner(std::move(inInner)) {};
         LexToken::Separator tokenValue;
         std::unique_ptr<AstNode::Any> inner;
 
+        Any copy() const override;
+
     };
 
-    struct BinaryOp final : public Operation
+    struct BinaryOp final : public Base
     {
         BinaryOp(const LexToken::Separator& inOp, std::unique_ptr<AstNode::Any>  inLeft, std::unique_ptr<AstNode::Any>  inRight) : tokenValue(inOp), left(std::move(inLeft)), right(std::move(inRight)) {};
         LexToken::Separator tokenValue;
         std::unique_ptr<AstNode::Any> left;
         std::unique_ptr<AstNode::Any> right;
+
+        Any copy() const override;
     };
 
-    struct Block final : public Stmt
+    struct Block final : public Base
     {
         explicit Block(std::vector<std::unique_ptr<AstNode::Any>> inStatements) : statements(std::move(inStatements)) {}
         std::vector<std::unique_ptr<AstNode::Any>> statements;
+
+        Any copy() const override;
     };
 
-    struct PrintStmt final : public Stmt
+    struct PrintStmt final : public Base
     {
         PrintStmt(const LexToken::Label& inOp,std::unique_ptr<AstNode::Any> inInner) : tokenValue(inOp), inner(std::move(inInner)) {};
         LexToken::Label tokenValue;
         std::unique_ptr<AstNode::Any> inner;
+
+        Any copy() const override;
     };
 
-    struct IfStmt final : public Stmt
+    struct IfStmt final : public Base
     {
         IfStmt(const LexToken::Label& inOp,
                 std::unique_ptr<AstNode::Any> when,
@@ -90,9 +114,11 @@ namespace AstNode
         std::unique_ptr<AstNode::Any> when;
         std::unique_ptr<AstNode::Any> then;
         std::unique_ptr<AstNode::Any> elseThen;
+
+        Any copy() const override;
     };
 
-    struct AssignStmt final : public Stmt
+    struct AssignStmt final : public Base
     {
         AssignStmt(const LexToken::Separator& inOp,
                 AstNode::Identifier inIdentifier,
@@ -104,9 +130,11 @@ namespace AstNode
         LexToken::Separator tokenValue;
         AstNode::Identifier identifier;
         std::unique_ptr<AstNode::Any> value;
+
+        Any copy() const override;
     };
 
-    struct WhileStmt final : public Stmt
+    struct WhileStmt final : public Base
     {
         WhileStmt(const LexToken::Label& inOp,
                 std::unique_ptr<AstNode::Any> until,
@@ -118,9 +146,11 @@ namespace AstNode
         LexToken::Label tokenValue;
         std::unique_ptr<AstNode::Any> until;
         std::unique_ptr<AstNode::Any> loop;
+
+        Any copy() const override;
     };
 
-    struct ForStmt final : public Stmt
+    struct ForStmt final : public Base
     {
         ForStmt(const LexToken::Label& inOp,
                 std::unique_ptr<AstNode::Any> doOnce,
@@ -138,128 +168,45 @@ namespace AstNode
         std::unique_ptr<AstNode::Any> until;
         std::unique_ptr<AstNode::Any> afterIter;
         std::unique_ptr<AstNode::Any> loop;
+
+        Any copy() const override;
     };
 
-    std::string stringify(const AstNode::Any& in, int intend = 0)
+    struct FunctionDecl final : public Base
     {
-        std::string result;
-        for(int i=0;i!=intend;i++) result+="\t";
+        FunctionDecl(const LexToken::Separator& inOp,
+                std::vector<AstNode::Identifier> params,
+                std::unique_ptr<AstNode::Any> body)
+        : tokenValue(inOp),
+            params(std::move(params)),
+            body(std::move(body)){};
 
-        result += in |vx::match {
-            [&in](const AstNode::Identifier& v)
-                { return "Identifier{"+v.tokenValue.content+"} at "+v.tokenValue.source.stringify(); },
-            [&in](const AstNode::Integer& v)
-                { return "Integer{"+std::to_string(v.tokenValue.content)+"} at "+v.tokenValue.source.stringify(); },
-            [&in](const AstNode::Float& v)
-                {return "Float{"+std::to_string(v.tokenValue.content)+"} at "+v.tokenValue.source.stringify(); },
-            [&in](const AstNode::Bool& v)
-                { return "Bool{"+v.tokenValue.content+"} at "+v.tokenValue.source.stringify(); },
-            [&in](const AstNode::String& v)
-                { return "String{"+v.tokenValue.content+"} at "+v.tokenValue.source.stringify(); },
-            [&in,intend](const AstNode::UnaryOp& v)
-            {
-                std::string result = "UnaryOp{\n";
+        LexToken::Separator tokenValue;
+        std::vector<AstNode::Identifier> params;
+        std::unique_ptr<AstNode::Any> body;
 
-                for(int i=0;i!=intend+1;i++) result+="\t";
-                result += v.tokenValue.content+" at "+v.tokenValue.source.stringify()+"\n";
+        Any copy() const override;
+    };
 
-                result += stringify(*v.inner, intend+1)+"\n";
-                for(int i=0;i!=intend;i++) result+="\t";
-                return result + "}";
-            },
-            [&in,intend](const AstNode::BinaryOp& v)
-            {
-                std::string result = "BinaryOp{\n";
+    struct FunctionCall final : public Base
+    {
+        FunctionCall(const LexToken::Separator& inOp,
+                AstNode::Identifier name,
+                std::vector<AstNode::Any> params)
+        : tokenValue(inOp), params(std::move(params)), name(std::move(name)){};
 
-                for(int i=0;i!=intend+1;i++) result+="\t";
-                result += v.tokenValue.content+" at "+v.tokenValue.source.stringify()+"\n";
+        LexToken::Separator tokenValue;
+        AstNode::Identifier name;
+        std::vector<AstNode::Any> params;
 
-                result += stringify(*v.left, intend+1)+",\n";
-                result += stringify(*v.right, intend+1)+"\n";
-                for(int i=0;i!=intend;i++) result+="\t";
-                return result + "}";
-            },
-            [&in,intend](const AstNode::Block& v)
-            {
-                std::string result = "Block{\n";
-                for(auto& i : v.statements)
-                {
-                    result += stringify(*i, intend+1)+",\n";
-                }
-                for(int i=0;i!=intend;i++) result+="\t";
-                return result + "}";
-            },
-            [&in,intend](const AstNode::PrintStmt& v)
-            {
-                std::string result = "PrintStmt{\n";
+        Any copy() const override;
+    };
 
-                for(int i=0;i!=intend+1;i++) result+="\t";
-                result += v.tokenValue.content+" at "+v.tokenValue.source.stringify()+"\n";
-
-                result += stringify(*v.inner, intend+1)+"\n";
-                for(int i=0;i!=intend;i++) result+="\t";
-                return result + "}";
-            },
-            [&in,intend](const AstNode::IfStmt& v)
-            {
-                std::string result = "IfStmt{\n";
-
-                for(int i=0;i!=intend+1;i++) result+="\t";
-                result += v.tokenValue.content+" at "+v.tokenValue.source.stringify()+"\n";
-
-                result += stringify(*v.when, intend+1)+",\n";
-                result += stringify(*v.then, intend+1)+"\n";
-                if(v.elseThen)
-                    result += stringify(*v.elseThen, intend+1)+"\n";
-                for(int i=0;i!=intend;i++) result+="\t";
-                return result + "}";
-            },
-            [&in,intend](const AstNode::AssignStmt& v)
-            {
-                std::string result = "AssignStmt{\n";
-
-                for(int i=0;i!=intend+1;i++) result+="\t";
-                result += v.tokenValue.content+" at "+v.tokenValue.source.stringify()+"\n";
-
-                result += stringify(v.identifier, intend+1)+",\n";
-                result += stringify(*v.value, intend+1)+"\n";
-                for(int i=0;i!=intend;i++) result+="\t";
-                return result + "}";
-            },
-            [&in,intend](const AstNode::WhileStmt& v)
-            {
-                std::string result = "WhileStmt{\n";
-
-                for(int i=0;i!=intend+1;i++) result+="\t";
-                result += v.tokenValue.content+" at "+v.tokenValue.source.stringify()+"\n";
-
-                result += stringify(*v.until, intend+1)+",\n";
-                result += stringify(*v.loop, intend+1)+"\n";
-                for(int i=0;i!=intend;i++) result+="\t";
-                return result + "}";
-            },
-            [&in,intend](const AstNode::ForStmt& v)
-            {
-                std::string result = "ForStmt{\n";
-
-                for(int i=0;i!=intend+1;i++) result+="\t";
-                result += v.tokenValue.content+" at "+v.tokenValue.source.stringify()+"\n";
-
-                result += stringify(*v.doOnce, intend+1)+",\n";
-                result += stringify(*v.until, intend+1)+"\n";
-                result += stringify(*v.afterIter, intend+1)+"\n";
-                result += stringify(*v.loop, intend+1)+"\n";
-                for(int i=0;i!=intend;i++) result+="\t";
-                return result + "}";
-            },
-        };
-
-        return result;
-    }
+    std::string stringify(const AstNode::Any& in, int intend = 0);
 }
 
 
-std::ostream& operator<<(std::ostream& os, const AstNode::Any& in)
+inline std::ostream& operator<<(std::ostream& os, const AstNode::Any& in)
 {
     return os << AstNode::stringify(in, 0);
 }

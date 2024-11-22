@@ -3,13 +3,16 @@
 #include <ostream>
 #include "vx.hpp"
 
+#include "AstNode.hpp"
+
 std::ostream& operator<<(std::ostream& os, const TemporaryValue::Any& in)
 {
     in |vx::match {
         [&os,&in](const TemporaryValue::Bool& v)       { os << "TemporaryValue::Bool{" << (v.value ? "true" : "false") << "}";},
         [&os,&in](const TemporaryValue::Integer& v)    { os << "TemporaryValue::Integer{" << v.value << "}";},
         [&os,&in](const TemporaryValue::Float& v)      { os << "TemporaryValue::Float{" << v.value << "}";},
-        [&os,&in](const TemporaryValue::String& v)     { os << "TemporaryValue::String{" << v.value << "}";}
+        [&os,&in](const TemporaryValue::String& v)     { os << "TemporaryValue::String{" << v.value << "}";},
+        [&os,&in](const TemporaryValue::Func& v)       { os << "TemporaryValue::Func{" << "}";}
     };
     return os;
 }

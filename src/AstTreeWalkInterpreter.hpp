@@ -39,7 +39,11 @@ TemporaryValue::Any treeWallInterpret(AstNode::Any& in,std::unique_ptr<RuntimeSc
         //TODO: make it better;
         auto e = scope->getVariable((in|vx::as<AstNode::Identifier>).tokenValue.content);
         if(e)
-            return *e;
+            return std::move(*e);
+    }
+    else if (in |vx::is<AstNode::FunctionDecl>)
+    {
+        return TemporaryValue::Func{(in|vx::as<AstNode::FunctionDecl>).copy()|vx::as<AstNode::FunctionDecl> };
     }
     else if (in |vx::is<AstNode::UnaryOp>)
     {
@@ -219,6 +223,10 @@ TemporaryValue::Any treeWallInterpret(AstNode::Any& in,std::unique_ptr<RuntimeSc
             [&in](const TemporaryValue::String& v)
             {
                 std::cout <<  std::regex_replace(v.value, std::regex(R"(\\n)"), "\n");
+            },
+            [&in](const TemporaryValue::Func& v)
+            {
+                std::cout << "<func>";
             }
         };
         return inner;
@@ -255,7 +263,7 @@ TemporaryValue::Any treeWallInterpret(AstNode::Any& in,std::unique_ptr<RuntimeSc
         {
             if(var->index() == value.index())
             {
-                *var = value;
+                *var = std::move(value);
                 return value;
             }
 
@@ -263,7 +271,7 @@ TemporaryValue::Any treeWallInterpret(AstNode::Any& in,std::unique_ptr<RuntimeSc
             std::cout << v.tokenValue.source.printHint()  << "here \n";
             throw std::runtime_error("");
         }
-        scope->variables[varName] = value;
+        scope->variables[varName] = std::move(value);
 
         return value;
     }
@@ -311,6 +319,45 @@ TemporaryValue::Any treeWallInterpret(AstNode::Any& in,std::unique_ptr<RuntimeSc
 
         RuntimeScope::removeLast(&scope);
         return ret;
+    }
+    else if (in |vx::is<AstNode::FunctionCall>)
+    {
+        auto& v = in|vx::as<AstNode::FunctionCall>;
+
+        if(!scope->getVariable(v.name.tokenValue.content))
+        {
+            std::cout << "Undefined function\n";
+            std::cout << v.tokenValue.source.printHint()  << "here \n";
+            throw std::runtime_error("");
+        }
+
+        if(!((*scope->getVariable(v.name.tokenValue.content))|vx::is<TemporaryValue::Func>))
+        {
+            std::cout << "that is not a function\n";
+            std::cout << v.tokenValue.source.printHint()  << "here \n";
+            throw std::runtime_error("");
+        }
+
+        auto& fn = (*scope->getVariable(v.name.tokenValue.content))|vx::as<TemporaryValue::Func>;
+
+        RuntimeScope::addNew(&scope);
+
+        if(fn.value.params.size() != v.params.size())
+        {
+            std::cout << "not matching number of arguments\n";
+            std::cout << v.tokenValue.source.printHint()  << "here \n";
+            throw std::runtime_error("");
+        }
+
+        for(int i = 0; i!= v.params.size(); ++i)
+        {
+            scope->variables[fn.value.params[i].tokenValue.content] = treeWallInterpret(v.params[i],scope);
+        }
+
+        auto res = treeWallInterpret(*fn.value.body,scope);
+
+        RuntimeScope::removeLast(&scope);
+        return std::move(res);
     }
 
 

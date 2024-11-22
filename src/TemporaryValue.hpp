@@ -1,6 +1,9 @@
 #pragma once
+#include <memory>
 #include <string>
 #include <variant>
+
+#include "AstNode.hpp"
 
 namespace TemporaryValue
 {
@@ -16,7 +19,9 @@ namespace TemporaryValue
     struct Float        final       : public WithContent<float>       {};
     struct String       final       : public WithContent<std::string> {};
 
-    using Any = std::variant<Bool,Integer,Float,String>;
+    struct Func         final       : public WithContent<AstNode::FunctionDecl> {};
+
+    using Any = std::variant<Bool,Integer,Float,String,Func>;
 
     float getFloat(Any& in);
     int getInteger(Any& in);

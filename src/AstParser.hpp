@@ -10,20 +10,57 @@ class AstParser
 public:
     explicit AstParser(LexScanner& inScanner) : scanner(inScanner) {};
 
-    //<identifier>
+    //<identifier> ::= <label> | <label> '(' <arg>? (',' <arg>)*
     std::unique_ptr<AstNode::Any> identifier()
     {
+
         if(const auto v = scanner.current<LexToken::Label>())
         {
             scanner.next();
-            return std::make_unique<AstNode::Any>( AstNode::Identifier{*v} );
+            auto id = AstNode::Identifier{*v};
+
+
+            if(const auto v = scanner.currentMath<LexToken::Separator>("("))
+            {
+                std::vector<AstNode::Any> args;
+                scanner.next();
+
+                if (auto el = scanner.currentMath<LexToken::Separator>(")"))
+                {
+                    scanner.next();
+                    return std::make_unique<AstNode::Any>( AstNode::FunctionCall{*v,id,std::move(args)} );
+                }
+                else
+                {
+                    args.push_back(std::move(*expr()));
+                    while (scanner.currentMath<LexToken::Separator>(",") )
+                    {
+                        scanner.next();
+
+                        args.push_back(std::move(*expr()));
+                    }
+
+                    if (auto el = scanner.currentMath<LexToken::Separator>(")") ; !el )
+                    {
+                        std::cout << "\nCRITICAL PARSER ERROR: mising ')' in function declaration " << LexToken::printHint(*v) << "opened here" << std::endl;
+                        throw std::runtime_error("");
+                    }
+                    scanner.next();
+
+                    return std::make_unique<AstNode::Any>( AstNode::FunctionCall{*v,id,std::move(args)} );
+                }
+            }
+            else
+            {
+                return std::move(std::make_unique<AstNode::Any>( std::move(id) ));
+            }
         }
 
-        std::cout << "\nCRITICAL INTERPRETER ERROR: couldn't parse as identifier " << (scanner.current() ? LexToken::printHint(*scanner.current()) : "'in the end of file'") << " unexpected token" << std::endl;
+        std::cout << "\nCRITICAL PARSER ERROR: couldn't parse as identifier " << (scanner.current() ? LexToken::printHint(*scanner.current()) : "'in the end of file'") << " unexpected token" << std::endl;
         throw std::runtime_error("");
     }
 
-    //<primary> ::= <identifier> | <integer> | <float> | <string> |  <bool> as ('true'|'false') | '(' <expr> ')'
+    //<primary> ::= <identifier> | <integer> | <float> | <string> | <function> |  <bool> as ('true'|'false') | '(' <expr> ')'
     std::unique_ptr<AstNode::Any> primary()
     {
         if(const auto v = scanner.current<LexToken::Integer>())
@@ -52,7 +89,10 @@ public:
         {
             return std::move(identifier());
         }
-
+        if(auto open = scanner.currentMath<LexToken::Separator>("fn"))
+        {
+            return std::move(function());
+        }
         if(auto open = scanner.currentMath<LexToken::Separator>("("))
         {
             scanner.next();
@@ -63,13 +103,13 @@ public:
             }
             else
             {
-                std::cout << "\nCRITICAL INTERPRETER ERROR: expected closing parentheses, opened " << LexToken::printHint(*open) << " not found closing ')'" << std::endl;
+                std::cout << "\nCRITICAL PARSER ERROR: expected closing parentheses, opened " << LexToken::printHint(*open) << " not found closing ')'" << std::endl;
                 throw std::runtime_error("");
             }
 
             return e;
         }
-        std::cout << "\nCRITICAL INTERPRETER ERROR: couldn't parse as primary " << (scanner.current() ? LexToken::printHint(*scanner.current()) : "'in the end of file'") << " unexpected token" << std::endl;
+        std::cout << "\nCRITICAL PARSER ERROR: couldn't parse as primary " << (scanner.current() ? LexToken::printHint(*scanner.current()) : "'in the end of file'") << " unexpected token" << std::endl;
         throw std::runtime_error("");
     }
 
@@ -185,18 +225,21 @@ public:
         return logic();
     }
 
-    //<assigment> ::= <identifier> ':=' <expr>
+    //<assigment> ::= <expr> ':=' <expr> | <identifier> '(' | <function>
     std::unique_ptr<AstNode::Any> assigment()
     {
-        if (auto t= scanner.current<LexToken::Label>() ) // <assigment>
+        if (auto t= scanner.currentMath<LexToken::Separator>("fn"))
         {
-            auto id = std::move(identifier());
+            return std::move(function());
+        }
+        else if (auto t= scanner.current<LexToken::Label>() ) // <assigment>
+        {
+            auto id = std::move(expr());
 
             auto el = scanner.currentMath<LexToken::Separator>(":=");
             if (!el)
             {
-                std::cout << "\nCRITICAL INTERPRETER ERROR: expected assing operator " << (scanner.current() ? LexToken::printHint(*scanner.current()) : "end of file") << " not found ':='" << std::endl;
-                throw std::runtime_error("");
+                return std::move(id);
             }
             scanner.next();
 
@@ -204,7 +247,7 @@ public:
 
             return std::make_unique<AstNode::Any>(AstNode::AssignStmt{*el,*id|vx::as<AstNode::Identifier>,std::move(ex)});
         }
-        std::cout << "\nCRITICAL INTERPRETER ERROR: couldn't parse as assigment " << (scanner.current() ? LexToken::printHint(*scanner.current()) : "'in the end of file'") << " unexpected token" << std::endl;
+        std::cout << "\nCRITICAL PARSER ERROR: couldn't parse as assigment " << (scanner.current() ? LexToken::printHint(*scanner.current()) : "'in the end of file'") << " unexpected token" << std::endl;
         throw std::runtime_error("");
     }
 
@@ -244,7 +287,7 @@ public:
 
             if (auto el = scanner.currentMath<LexToken::Separator>("(") ; !el )
             {
-                std::cout << "\nCRITICAL INTERPRETER ERROR: expected '(' if for loop statement " << (scanner.current() ? LexToken::printHint(*scanner.current()) : "end of file") << std::endl;
+                std::cout << "\nCRITICAL PARSER ERROR: expected '(' if for loop statement " << (scanner.current() ? LexToken::printHint(*scanner.current()) : "end of file") << std::endl;
                 throw std::runtime_error("");
             }
             scanner.next();
@@ -253,7 +296,7 @@ public:
 
             if (auto el = scanner.currentMath<LexToken::Separator>(",") ; !el )
             {
-                std::cout << "\nCRITICAL INTERPRETER ERROR: expected ',' if for loop statement " << (scanner.current() ? LexToken::printHint(*scanner.current()) : "end of file") << std::endl;
+                std::cout << "\nCRITICAL PARSER ERROR: expected ',' if for loop statement " << (scanner.current() ? LexToken::printHint(*scanner.current()) : "end of file") << std::endl;
                 throw std::runtime_error("");
             }
             scanner.next();
@@ -262,7 +305,7 @@ public:
 
             if (auto el = scanner.currentMath<LexToken::Separator>(",") ; !el )
             {
-                std::cout << "\nCRITICAL INTERPRETER ERROR: expected ',' if for loop statement " << (scanner.current() ? LexToken::printHint(*scanner.current()) : "end of file") << std::endl;
+                std::cout << "\nCRITICAL PARSER ERROR: expected ',' if for loop statement " << (scanner.current() ? LexToken::printHint(*scanner.current()) : "end of file") << std::endl;
                 throw std::runtime_error("");
             }
             scanner.next();
@@ -271,7 +314,7 @@ public:
 
             if (auto el = scanner.currentMath<LexToken::Separator>(")") ; !el )
             {
-                std::cout << "\nCRITICAL INTERPRETER ERROR: expected ')' if for loop statement " << (scanner.current() ? LexToken::printHint(*scanner.current()) : "end of file") << std::endl;
+                std::cout << "\nCRITICAL PARSER ERROR: expected ')' if for loop statement " << (scanner.current() ? LexToken::printHint(*scanner.current()) : "end of file") << std::endl;
                 throw std::runtime_error("");
             }
             scanner.next();
@@ -302,8 +345,58 @@ public:
             throw std::runtime_error("");
         }
 
-        std::cout << "\nCRITICAL INTERPRET ERROR: couldn't parse as stmt " << (scanner.current() ? LexToken::printHint(*scanner.current()) : "'in the end of file'") << " unexpected token" << std::endl;
+        std::cout << "\nCRITICAL PARSER ERROR: couldn't parse as stmt " << (scanner.current() ? LexToken::printHint(*scanner.current()) : "'in the end of file'") << " unexpected token" << std::endl;
         throw std::runtime_error("");
+    }
+
+    //<param> ::= <identifier>
+    std::unique_ptr<AstNode::Any> param()
+    {
+        return std::move(identifier());
+    }
+    //<function> ::= 'fn' '(' <param>? (',' <param>)* ) <stmt>
+    std::unique_ptr<AstNode::Any> function()
+    {
+        auto oP = scanner.currentMath<LexToken::Separator>("fn");
+        if (!oP)
+        {
+            std::cout << "\nCRITICAL PARSER ERROR: expected 'fn' as begining of function declaration " << (scanner.current() ? LexToken::printHint(*scanner.current()) : "end of file") << std::endl;
+            throw std::runtime_error("");
+        }
+        scanner.next();
+
+        std::vector<AstNode::Identifier> params;
+        if (auto el = scanner.currentMath<LexToken::Separator>("(") ; !el )
+        {
+            std::cout << "\nCRITICAL PARSER ERROR: expected '(' after function declaration " << (scanner.current() ? LexToken::printHint(*scanner.current()) : "end of file") << std::endl;
+            throw std::runtime_error("");
+        }
+        scanner.next();
+
+        if (auto el = scanner.currentMath<LexToken::Separator>(")"))
+        {
+            scanner.next();
+        }
+        else
+        {
+            params.push_back(*param()|vx::as<AstNode::Identifier>);
+            while (scanner.currentMath<LexToken::Separator>(",") )
+            {
+                scanner.next();
+
+                params.push_back(*param()|vx::as<AstNode::Identifier>);
+            }
+
+            if (auto el = scanner.currentMath<LexToken::Separator>(")") ; !el )
+            {
+                std::cout << "\nCRITICAL PARSER ERROR: mising ')' in function declaration " << LexToken::printHint(*oP) << "opened here" << std::endl;
+                throw std::runtime_error("");
+            }
+            scanner.next();
+        }
+        auto st = std::move(stmt());
+
+        return std::make_unique<AstNode::Any>(AstNode::FunctionDecl{*oP,params,std::move(st)});
     }
 
     //<block> ::= <stmt>*

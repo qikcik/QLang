@@ -1,4 +1,5 @@
 // Copied from: https://github.com/AVasK/vx
+#pragma once
 
 #include <type_traits>
 #include <iostream>
