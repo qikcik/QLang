@@ -60,13 +60,17 @@ int main()
             std::cout << "\nINTERPRET: \n";
 
 
-            treeWallInterpret(*root,rootScope,true);
+            treeWallInterpret(*root,rootScope.get(),rootScope.get(),true);
 
             std::cout << "\n";
         }
         catch(std::exception& e)
         {
             std::cout << "\nERROR OCCURED: more info above \n";
+        }
+        catch(FuncReturn& e)
+        {
+            std::cout << "\nTried return from main scope \n";
         }
     }
 

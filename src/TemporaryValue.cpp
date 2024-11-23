@@ -12,7 +12,7 @@ std::ostream& operator<<(std::ostream& os, const TemporaryValue::Any& in)
         [&os,&in](const TemporaryValue::Integer& v)    { os << "TemporaryValue::Integer{" << v.value << "}";},
         [&os,&in](const TemporaryValue::Float& v)      { os << "TemporaryValue::Float{" << v.value << "}";},
         [&os,&in](const TemporaryValue::String& v)     { os << "TemporaryValue::String{" << v.value << "}";},
-        [&os,&in](const TemporaryValue::Func& v)       { os << "TemporaryValue::Func{" << "}";}
+        [&os,&in](const TemporaryValue::Func& v)       { os << "TemporaryValue::Func{" << v.value.params.size() << "}";}
     };
     return os;
 }
@@ -21,7 +21,7 @@ float TemporaryValue::getFloat(TemporaryValue::Any& in)
 {
     if(in|vx::is<Integer>)
     {
-        std::cout << "WRN: context required conversion to Float from " << in << "'\n";
+        //std::cout << "WRN: context required conversion to Float from " << in << "'\n";
         return static_cast<float>((in|vx::as<Integer>).value);
     }
     if(in|vx::is<Float>)
@@ -61,7 +61,7 @@ int TemporaryValue::getInteger(TemporaryValue::Any& in)
         return static_cast<float>((in|vx::as<Integer>).value);
     if(in|vx::is<Float>)
     {
-        std::cout << "WRN: context required conversion to Integer from " << in << "'\n";
+        //std::cout << "WRN: context required conversion to Integer from " << in << "'\n";
         return static_cast<int>((in|vx::as<Float>).value);
     }
 

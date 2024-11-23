@@ -14,7 +14,12 @@ concept hasTokenValue = requires(T t)
     {t.tokenValue} -> std::convertible_to<LexToken::Any>;
 };
 
-TemporaryValue::Any treeWallInterpret(AstNode::Any& in,std::unique_ptr<RuntimeScope>& scope,bool preventNewScopeFromBlock = false)
+struct FuncReturn
+{
+    TemporaryValue::Any result;
+};
+
+TemporaryValue::Any treeWallInterpret(AstNode::Any& in,RuntimeScope* globalScope,RuntimeScope* localScope,bool preventNewScopeFromBlock = false)
 {
     const int MAX_LOOP_ITERATION = 100000;
 
@@ -37,7 +42,7 @@ TemporaryValue::Any treeWallInterpret(AstNode::Any& in,std::unique_ptr<RuntimeSc
     else if (in |vx::is<AstNode::Identifier>)
     {
         //TODO: make it better;
-        auto e = scope->getVariable((in|vx::as<AstNode::Identifier>).tokenValue.content);
+        auto e = localScope->getVariable((in|vx::as<AstNode::Identifier>).tokenValue.content);
         if(e)
             return std::move(*e);
     }
@@ -50,7 +55,7 @@ TemporaryValue::Any treeWallInterpret(AstNode::Any& in,std::unique_ptr<RuntimeSc
         auto& v = in|vx::as<AstNode::UnaryOp>;
         if(v.tokenValue.content == "-")
         {
-            auto inner = treeWallInterpret(*v.inner,scope);
+            auto inner = treeWallInterpret(*v.inner,globalScope,localScope);
 
             if (inner |vx::is<TemporaryValue::Float>)
             {
@@ -64,7 +69,7 @@ TemporaryValue::Any treeWallInterpret(AstNode::Any& in,std::unique_ptr<RuntimeSc
 
         if(v.tokenValue.content == "+")
         {
-            auto inner = treeWallInterpret(*v.inner,scope);
+            auto inner = treeWallInterpret(*v.inner,globalScope,localScope);
 
             if (inner |vx::is<TemporaryValue::Float>)
             {
@@ -78,7 +83,7 @@ TemporaryValue::Any treeWallInterpret(AstNode::Any& in,std::unique_ptr<RuntimeSc
 
         if(v.tokenValue.content == "!")
         {
-            auto inner = treeWallInterpret(*v.inner,scope);
+            auto inner = treeWallInterpret(*v.inner,globalScope,localScope);
 
             if (inner |vx::is<TemporaryValue::Bool>)
             {
@@ -91,7 +96,7 @@ TemporaryValue::Any treeWallInterpret(AstNode::Any& in,std::unique_ptr<RuntimeSc
     {
         auto& v = in|vx::as<AstNode::BinaryOp>;
 
-        auto left = treeWallInterpret(*v.left,scope);
+        auto left = treeWallInterpret(*v.left,globalScope,localScope);
 
         if(left |vx::is<TemporaryValue::Bool>)
         {
@@ -100,7 +105,7 @@ TemporaryValue::Any treeWallInterpret(AstNode::Any& in,std::unique_ptr<RuntimeSc
                 if(TemporaryValue::getBool(left) == false)
                     return TemporaryValue::Bool{false};
 
-                auto right = treeWallInterpret(*v.right,scope);
+                auto right = treeWallInterpret(*v.right,globalScope,localScope);
                 return TemporaryValue::Bool{TemporaryValue::getBool(right)};
 
             }
@@ -109,18 +114,18 @@ TemporaryValue::Any treeWallInterpret(AstNode::Any& in,std::unique_ptr<RuntimeSc
                 if(TemporaryValue::getBool(left) == true)
                     return TemporaryValue::Bool{true};
 
-                auto right = treeWallInterpret(*v.right,scope);
+                auto right = treeWallInterpret(*v.right,globalScope,localScope);
                 return TemporaryValue::Bool{TemporaryValue::getBool(right)};
             }
 
-            auto right = treeWallInterpret(*v.right,scope);
+            auto right = treeWallInterpret(*v.right,globalScope,localScope);
             if(v.tokenValue.content == "==")
                 return TemporaryValue::Bool{TemporaryValue::getBool(left) == TemporaryValue::getBool(right)};
             if(v.tokenValue.content == "!=")
                 return TemporaryValue::Bool{TemporaryValue::getBool(left) != TemporaryValue::getBool(right)};
         }
 
-        auto right = treeWallInterpret(*v.right,scope);
+        auto right = treeWallInterpret(*v.right,globalScope,localScope);
 
         if(left |vx::is<TemporaryValue::Integer> && right |vx::is<TemporaryValue::Integer>)
         {
@@ -199,23 +204,37 @@ TemporaryValue::Any treeWallInterpret(AstNode::Any& in,std::unique_ptr<RuntimeSc
     }
     else if (in |vx::is<AstNode::Block>)
     {
-        if(!preventNewScopeFromBlock) RuntimeScope::addNew(&scope);
         auto& v = in|vx::as<AstNode::Block>;
-        if(v.statements.size() >= 1)
+        if(preventNewScopeFromBlock)
         {
-            for(int i = 0; i != v.statements.size()-1; i++)
+            if(v.statements.size() >= 1)
             {
-                treeWallInterpret(*v.statements[i],scope);
+                for(int i = 0; i != v.statements.size()-1; i++)
+                {
+                    treeWallInterpret(*v.statements[i],globalScope,localScope);
+                }
+                auto ret =  treeWallInterpret(*v.statements[v.statements.size()-1],globalScope,localScope);
+                return ret;
             }
-            auto ret =  treeWallInterpret(*v.statements[v.statements.size()-1],scope);
-            if(!preventNewScopeFromBlock) RuntimeScope::removeLast(&scope);
-            return ret;
+        }
+        else
+        {
+            auto blockScope = std::make_unique<RuntimeScope>(localScope);
+            if(v.statements.size() >= 1)
+            {
+                for(int i = 0; i != v.statements.size()-1; i++)
+                {
+                    treeWallInterpret(*v.statements[i],globalScope,blockScope.get());
+                }
+                auto ret =  treeWallInterpret(*v.statements[v.statements.size()-1],globalScope,blockScope.get());
+                return ret;
+            }
         }
     }
     else if (in |vx::is<AstNode::PrintStmt>)
     {
         auto& v = in|vx::as<AstNode::PrintStmt>;
-        auto inner = treeWallInterpret(*v.inner,scope);
+        auto inner = treeWallInterpret(*v.inner,globalScope,localScope);
         inner |vx::match {
             [&in](const TemporaryValue::Bool& v)       { std::cout << (v.value ? "true" : "false") ;},
             [&in](const TemporaryValue::Integer& v)    { std::cout <<  v.value;},
@@ -234,20 +253,18 @@ TemporaryValue::Any treeWallInterpret(AstNode::Any& in,std::unique_ptr<RuntimeSc
     else if (in |vx::is<AstNode::IfStmt>)
     {
         auto& v = in|vx::as<AstNode::IfStmt>;
-        auto when = treeWallInterpret(*v.when,scope);
+        auto when = treeWallInterpret(*v.when,globalScope,localScope);
 
         if(TemporaryValue::getBool(when))
         {
-            RuntimeScope::addNew(&scope);
-            auto ret = treeWallInterpret(*v.then,scope,true);
-            RuntimeScope::removeLast(&scope);
+            auto blockScope = std::make_unique<RuntimeScope>(localScope);
+            auto ret = treeWallInterpret(*v.then,globalScope,blockScope.get(),true);
             return ret;
         }
         if(v.elseThen)
         {
-            RuntimeScope::addNew(&scope);
-            auto ret = treeWallInterpret(*v.elseThen,scope,true);
-            RuntimeScope::removeLast(&scope);
+            auto blockScope = std::make_unique<RuntimeScope>(localScope);
+            auto ret = treeWallInterpret(*v.elseThen,globalScope,localScope,true);
             return ret;
         }
         return {};
@@ -257,9 +274,9 @@ TemporaryValue::Any treeWallInterpret(AstNode::Any& in,std::unique_ptr<RuntimeSc
     {
         auto& v = in|vx::as<AstNode::AssignStmt>;
         auto varName = v.identifier.tokenValue.content;
-        auto value = treeWallInterpret(*v.value,scope);
+        auto value = treeWallInterpret(*v.value,globalScope,localScope);
 
-        if(auto var = scope->getVariable(varName))
+        if(auto var = localScope->getVariable(varName))
         {
             if(var->index() == value.index())
             {
@@ -271,76 +288,74 @@ TemporaryValue::Any treeWallInterpret(AstNode::Any& in,std::unique_ptr<RuntimeSc
             std::cout << v.tokenValue.source.printHint()  << "here \n";
             throw std::runtime_error("");
         }
-        scope->variables[varName] = std::move(value);
+        localScope->variables[varName] = std::move(value);
 
         return value;
     }
     else if (in |vx::is<AstNode::WhileStmt>)
     {
         auto& v = in|vx::as<AstNode::WhileStmt>;
-        RuntimeScope::addNew(&scope);
+        auto blockScope = std::make_unique<RuntimeScope>(localScope);
 
         TemporaryValue::Any ret = TemporaryValue::Bool{false};
 
         for(int i = 0; i!= MAX_LOOP_ITERATION; i++) //max iteration
         {
-            auto until = treeWallInterpret(*v.until,scope);
+            auto until = treeWallInterpret(*v.until,globalScope,blockScope.get());
             if(TemporaryValue::getBool(until))
             {
-                ret = treeWallInterpret(*v.loop,scope,true);
+                ret = treeWallInterpret(*v.loop,globalScope,blockScope.get(),true);
                 continue;
             }
             break;
         }
 
-        RuntimeScope::removeLast(&scope);
         return ret;
     }
     else if (in |vx::is<AstNode::ForStmt>)
     {
         auto& v = in|vx::as<AstNode::ForStmt>;
-        RuntimeScope::addNew(&scope);
+        auto blockScope = std::make_unique<RuntimeScope>(localScope);
 
-        treeWallInterpret(*v.doOnce,scope,true);
+        treeWallInterpret(*v.doOnce,globalScope,blockScope.get(),true);
 
         TemporaryValue::Any ret = TemporaryValue::Bool{false};
 
         for(int i = 0; i!= MAX_LOOP_ITERATION; i++) //max iteration
         {
-            auto until = treeWallInterpret(*v.until,scope);
+            auto until = treeWallInterpret(*v.until,globalScope,blockScope.get());
             if(TemporaryValue::getBool(until))
             {
-                ret = treeWallInterpret(*v.loop,scope,true);
-                treeWallInterpret(*v.afterIter,scope,true);
+                ret = treeWallInterpret(*v.loop,globalScope,blockScope.get(),true);
+                treeWallInterpret(*v.afterIter,globalScope,blockScope.get(),true);
                 continue;
             }
             break;
         }
 
-        RuntimeScope::removeLast(&scope);
         return ret;
     }
     else if (in |vx::is<AstNode::FunctionCall>)
     {
         auto& v = in|vx::as<AstNode::FunctionCall>;
 
-        if(!scope->getVariable(v.name.tokenValue.content))
+        if(!localScope->getVariable(v.name.tokenValue.content))
         {
             std::cout << "Undefined function\n";
             std::cout << v.tokenValue.source.printHint()  << "here \n";
             throw std::runtime_error("");
         }
 
-        if(!((*scope->getVariable(v.name.tokenValue.content))|vx::is<TemporaryValue::Func>))
+        if(!((*localScope->getVariable(v.name.tokenValue.content))|vx::is<TemporaryValue::Func>))
         {
             std::cout << "that is not a function\n";
             std::cout << v.tokenValue.source.printHint()  << "here \n";
             throw std::runtime_error("");
         }
 
-        auto& fn = (*scope->getVariable(v.name.tokenValue.content))|vx::as<TemporaryValue::Func>;
+        auto& fn = (*localScope->getVariable(v.name.tokenValue.content))|vx::as<TemporaryValue::Func>;
 
-        RuntimeScope::addNew(&scope);
+
 
         if(fn.value.params.size() != v.params.size())
         {
@@ -348,19 +363,28 @@ TemporaryValue::Any treeWallInterpret(AstNode::Any& in,std::unique_ptr<RuntimeSc
             std::cout << v.tokenValue.source.printHint()  << "here \n";
             throw std::runtime_error("");
         }
-
+       auto fnScope = std::make_unique<RuntimeScope>(globalScope);
         for(int i = 0; i!= v.params.size(); ++i)
         {
-            scope->variables[fn.value.params[i].tokenValue.content] = treeWallInterpret(v.params[i],scope);
+            fnScope->variables[fn.value.params[i].tokenValue.content] = treeWallInterpret(v.params[i],globalScope,localScope);
         }
 
-        auto res = treeWallInterpret(*fn.value.body,scope);
-
-        RuntimeScope::removeLast(&scope);
-        return std::move(res);
+        try
+        {
+            auto res = treeWallInterpret(*fn.value.body,globalScope,fnScope.get(),true);
+            return std::move(res);
+        }
+        catch(FuncReturn& ret)
+        {
+            return std::move(ret.result);
+        }
     }
+    else if (in |vx::is<AstNode::Return>)
+    {
+        auto& v = in|vx::as<AstNode::Return>;
 
-
+        throw FuncReturn{treeWallInterpret(*v.inner,globalScope,localScope)};
+    }
     std::cout << "unable to execute '" << in << "'\n";
     std::visit([](auto& v)
     {

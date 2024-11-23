@@ -12,9 +12,9 @@ namespace AstNode
     struct Identifier;
     struct Integer; struct Float; struct String; struct Bool;
     struct UnaryOp; struct BinaryOp;
-    struct Block; struct PrintStmt; struct IfStmt; struct AssignStmt; struct WhileStmt; struct ForStmt; struct FunctionDecl; struct FunctionCall;
+    struct Block; struct PrintStmt; struct IfStmt; struct AssignStmt; struct WhileStmt; struct ForStmt; struct FunctionDecl; struct FunctionCall; struct Return;
 
-    using Any = std::variant<Identifier,Integer,Float,String,Bool,UnaryOp,BinaryOp,Block,PrintStmt,IfStmt,AssignStmt,WhileStmt,ForStmt, FunctionDecl,FunctionCall>;
+    using Any = std::variant<Identifier,Integer,Float,String,Bool,UnaryOp,BinaryOp,Block,PrintStmt,IfStmt,AssignStmt,WhileStmt,ForStmt, FunctionDecl,FunctionCall,Return>;
 
     struct Base
     {
@@ -200,6 +200,16 @@ namespace AstNode
         std::vector<AstNode::Any> params;
 
         Any copy() const override;
+    };
+
+    struct Return final : public Base
+    {
+        Return(const LexToken::Label& inOp,std::unique_ptr<AstNode::Any> inInner) : tokenValue(inOp), inner(std::move(inInner)) {};
+        LexToken::Label tokenValue;
+        std::unique_ptr<AstNode::Any> inner;
+
+        Any copy() const override;
+
     };
 
     std::string stringify(const AstNode::Any& in, int intend = 0);

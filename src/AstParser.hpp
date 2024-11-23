@@ -323,6 +323,12 @@ public:
 
             return std::make_unique<AstNode::Any>(AstNode::ForStmt{*t,std::move(doOnce),std::move(until),std::move(after),std::move(st)});
         }
+        else if (auto t= scanner.currentMath<LexToken::Label>("ret") )
+        {
+            scanner.next();
+            auto e = std::move(expr());
+            return std::make_unique<AstNode::Any>(AstNode::Return{*t,std::move(e)});
+        }
         else if (auto t= scanner.current<LexToken::Label>() ) // <assigment>
         {
             return std::move(assigment());

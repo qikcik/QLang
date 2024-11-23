@@ -7,7 +7,7 @@
 
 struct RuntimeScope
 {
-    explicit RuntimeScope(std::unique_ptr<RuntimeScope> inParent) : parent(std::move(inParent)) {};
+    explicit RuntimeScope(RuntimeScope* inParent) : parent(inParent) {};
 
     TemporaryValue::Any* getVariable(std::string inName)
     {
@@ -23,8 +23,5 @@ struct RuntimeScope
     }
 
     std::map<std::string,TemporaryValue::Any> variables {};
-    std::unique_ptr<RuntimeScope> parent;
-
-    static void addNew(std::unique_ptr<RuntimeScope>* in);
-    static void removeLast(std::unique_ptr<RuntimeScope>* in);
+    RuntimeScope* parent;
 };

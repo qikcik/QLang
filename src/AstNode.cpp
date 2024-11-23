@@ -86,6 +86,11 @@ AstNode::Any AstNode::FunctionCall::copy() const
     return ret;
 }
 
+AstNode::Any AstNode::Return::copy() const
+{return Return(tokenValue,
+                   std::make_unique<Any>(std::visit([](auto& v){ return v.copy();},*inner))
+); }
+
 std::string AstNode::stringify(const AstNode::Any& in, int intend)
 {
     std::string result;
@@ -138,6 +143,17 @@ std::string AstNode::stringify(const AstNode::Any& in, int intend)
         [&in,intend](const AstNode::PrintStmt& v)
         {
             std::string result = "PrintStmt{\n";
+
+            for(int i=0;i!=intend+1;i++) result+="\t";
+            result += v.tokenValue.content+" at "+v.tokenValue.source.stringify()+"\n";
+
+            result += stringify(*v.inner, intend+1)+"\n";
+            for(int i=0;i!=intend;i++) result+="\t";
+            return result + "}";
+        },
+        [&in,intend](const AstNode::Return& v)
+        {
+            std::string result = "Return{\n";
 
             for(int i=0;i!=intend+1;i++) result+="\t";
             result += v.tokenValue.content+" at "+v.tokenValue.source.stringify()+"\n";
