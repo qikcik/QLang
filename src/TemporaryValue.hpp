@@ -19,7 +19,23 @@ namespace TemporaryValue
     struct Float        final       : public WithContent<float>       {};
     struct String       final       : public WithContent<std::string> {};
 
-    struct Func         final       : public WithContent<AstNode::FunctionDecl> {};
+    struct Func         final       : public WithContent<AstNode::OwnedNode>
+    {
+        Func(AstNode::OwnedNode node)
+        {
+            value = std::move(node);
+        }
+        Func(const Func& o)
+        {
+            value = o.value->copy();
+        }
+
+        void operator=(const Func& o)
+        {
+            value = o.value->copy();
+        }
+
+    };
 
     using Any = std::variant<Bool,Integer,Float,String,Func>;
 

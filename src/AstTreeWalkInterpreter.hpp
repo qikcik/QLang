@@ -8,6 +8,8 @@
 #include "RuntimeScope.hpp"
 #include "TemporaryValue.hpp"
 
+const int MAX_LOOP_ITERATION = 1000;
+
 template <typename T>
 concept hasTokenValue = requires(T t)
 {
@@ -19,181 +21,198 @@ struct FuncReturn
     TemporaryValue::Any result;
 };
 
-TemporaryValue::Any treeWallInterpret(AstNode::Any& in,RuntimeScope* globalScope,RuntimeScope* localScope,bool preventNewScopeFromBlock = false)
+TemporaryValue::Any treeWallInterpret(const AstNode::OwnedNode& in,RuntimeScope& globalScope,RuntimeScope& localScope,bool preventNewScopeFromBlock = false);
+struct InterpreterVisitor : public AstNode::IVisitor
 {
-    const int MAX_LOOP_ITERATION = 100000;
 
-    if (in |vx::is<AstNode::Float>)
+    TemporaryValue::Any& result;
+    RuntimeScope& globalScope;
+    RuntimeScope& localScope;
+    bool preventNewScopeFromBlock;
+
+
+    InterpreterVisitor(TemporaryValue::Any& result, RuntimeScope& global_scope, RuntimeScope& local_scope,
+        bool prevent_new_scope_from_block)
+        : result(result),
+          globalScope(global_scope),
+          localScope(local_scope),
+          preventNewScopeFromBlock(prevent_new_scope_from_block)
     {
-        return TemporaryValue::Float{(in|vx::as<AstNode::Float>).tokenValue.content};
     }
-    else if (in |vx::is<AstNode::Integer>)
+
+    void operator()(const AstNode::Identifier& v) override
     {
-        return TemporaryValue::Integer{(in|vx::as<AstNode::Integer>).tokenValue.content};
+        auto e = localScope.getVariable(v.tokenValue.content);
+        if(e) result = TemporaryValue::Any{*e};
     }
-    else if (in |vx::is<AstNode::Bool>)
+
+    void operator()(const AstNode::Integer& v) override
     {
-        return TemporaryValue::Bool{(in|vx::as<AstNode::Bool>).tokenValue.content == "true"};
+        result = TemporaryValue::Integer{v.tokenValue.content};
     }
-    else if (in |vx::is<AstNode::String>)
+    void operator()(const AstNode::Float& v) override
     {
-        return TemporaryValue::String{(in|vx::as<AstNode::String>).tokenValue.content};
+        result = TemporaryValue::Float{v.tokenValue.content};
     }
-    else if (in |vx::is<AstNode::Identifier>)
+    void operator()(const AstNode::String& v) override
     {
-        //TODO: make it better;
-        auto e = localScope->getVariable((in|vx::as<AstNode::Identifier>).tokenValue.content);
-        if(e)
-            return std::move(*e);
+        result = TemporaryValue::String{v.tokenValue.content};
     }
-    else if (in |vx::is<AstNode::FunctionDecl>)
+
+    void operator()(const AstNode::Bool& v) override
     {
-        return TemporaryValue::Func{(in|vx::as<AstNode::FunctionDecl>).copy()|vx::as<AstNode::FunctionDecl> };
+        result = TemporaryValue::Bool{v.tokenValue.content == "true"};
     }
-    else if (in |vx::is<AstNode::UnaryOp>)
+    void operator()(const AstNode::UnaryOp& v) override
     {
-        auto& v = in|vx::as<AstNode::UnaryOp>;
         if(v.tokenValue.content == "-")
         {
-            auto inner = treeWallInterpret(*v.inner,globalScope,localScope);
+            auto inner = treeWallInterpret(v.inner,globalScope,localScope);
 
             if (inner |vx::is<TemporaryValue::Float>)
             {
-                return TemporaryValue::Float{-(inner|vx::as<TemporaryValue::Float>).value };
+                result = TemporaryValue::Float{-(inner|vx::as<TemporaryValue::Float>).value };
             }
             else if (inner |vx::is<TemporaryValue::Integer>)
             {
-                return TemporaryValue::Integer{-(inner|vx::as<TemporaryValue::Integer>).value };
+                result = TemporaryValue::Integer{-(inner|vx::as<TemporaryValue::Integer>).value };
             }
         }
 
         if(v.tokenValue.content == "+")
         {
-            auto inner = treeWallInterpret(*v.inner,globalScope,localScope);
+            auto inner = treeWallInterpret(v.inner,globalScope,localScope);
 
             if (inner |vx::is<TemporaryValue::Float>)
             {
-                return TemporaryValue::Float{(inner|vx::as<TemporaryValue::Float>).value };
+                result = TemporaryValue::Float{(inner|vx::as<TemporaryValue::Float>).value };
             }
             else if (inner |vx::is<TemporaryValue::Integer>)
             {
-                return TemporaryValue::Integer{(inner|vx::as<TemporaryValue::Integer>).value };
+                result = TemporaryValue::Integer{(inner|vx::as<TemporaryValue::Integer>).value };
             }
         }
 
         if(v.tokenValue.content == "!")
         {
-            auto inner = treeWallInterpret(*v.inner,globalScope,localScope);
+            auto inner = treeWallInterpret(v.inner,globalScope,localScope);
 
             if (inner |vx::is<TemporaryValue::Bool>)
             {
-                return TemporaryValue::Bool{!(inner|vx::as<TemporaryValue::Bool>).value };
+                result = TemporaryValue::Bool{!(inner|vx::as<TemporaryValue::Bool>).value };
             }
         }
     }
-
-    else if (in |vx::is<AstNode::BinaryOp>)
+    void operator()(const AstNode::BinaryOp& v) override
     {
-        auto& v = in|vx::as<AstNode::BinaryOp>;
-
-        auto left = treeWallInterpret(*v.left,globalScope,localScope);
+       auto left = treeWallInterpret(v.left,globalScope,localScope);
 
         if(left |vx::is<TemporaryValue::Bool>)
         {
             if(v.tokenValue.content == "&&")
             {
                 if(TemporaryValue::getBool(left) == false)
-                    return TemporaryValue::Bool{false};
+                {
+                    result = TemporaryValue::Bool{false};
+                    return;
+                }
 
-                auto right = treeWallInterpret(*v.right,globalScope,localScope);
-                return TemporaryValue::Bool{TemporaryValue::getBool(right)};
-
+                auto right = treeWallInterpret(v.right,globalScope,localScope);
+                result = TemporaryValue::Bool{TemporaryValue::getBool(right)};
+                return;
             }
             if(v.tokenValue.content == "||")
             {
                 if(TemporaryValue::getBool(left) == true)
-                    return TemporaryValue::Bool{true};
+                {
+                    result = TemporaryValue::Bool{true};
+                    return;
+                }
 
-                auto right = treeWallInterpret(*v.right,globalScope,localScope);
-                return TemporaryValue::Bool{TemporaryValue::getBool(right)};
+                auto right = treeWallInterpret(v.right,globalScope,localScope);
+                result = TemporaryValue::Bool{TemporaryValue::getBool(right)};
+                return;
             }
 
-            auto right = treeWallInterpret(*v.right,globalScope,localScope);
+            auto right = treeWallInterpret(v.right,globalScope,localScope);
             if(v.tokenValue.content == "==")
-                return TemporaryValue::Bool{TemporaryValue::getBool(left) == TemporaryValue::getBool(right)};
+                result = TemporaryValue::Bool{TemporaryValue::getBool(left) == TemporaryValue::getBool(right)};
             if(v.tokenValue.content == "!=")
-                return TemporaryValue::Bool{TemporaryValue::getBool(left) != TemporaryValue::getBool(right)};
+                result = TemporaryValue::Bool{TemporaryValue::getBool(left) != TemporaryValue::getBool(right)};
+            return;
         }
 
-        auto right = treeWallInterpret(*v.right,globalScope,localScope);
+        auto right = treeWallInterpret(v.right,globalScope,localScope);
 
         if(left |vx::is<TemporaryValue::Integer> && right |vx::is<TemporaryValue::Integer>)
         {
             if(v.tokenValue.content == "==")
-                return TemporaryValue::Bool{TemporaryValue::getInteger(left) == TemporaryValue::getInteger(right)};
+                {result = TemporaryValue::Bool{TemporaryValue::getInteger(left) == TemporaryValue::getInteger(right)};return;}
             if(v.tokenValue.content == "!=")
-                return TemporaryValue::Bool{TemporaryValue::getInteger(left) != TemporaryValue::getInteger(right)};
+                {result = TemporaryValue::Bool{TemporaryValue::getInteger(left) != TemporaryValue::getInteger(right)};return;}
             if(v.tokenValue.content == "<")
-                return TemporaryValue::Bool{TemporaryValue::getInteger(left) < TemporaryValue::getInteger(right)};
+                {result = TemporaryValue::Bool{TemporaryValue::getInteger(left) < TemporaryValue::getInteger(right)};return;}
             if(v.tokenValue.content == ">")
-                return TemporaryValue::Bool{TemporaryValue::getInteger(left) > TemporaryValue::getInteger(right)};
+                {result = TemporaryValue::Bool{TemporaryValue::getInteger(left) > TemporaryValue::getInteger(right)};return;}
             if(v.tokenValue.content == "<=")
-                return TemporaryValue::Bool{TemporaryValue::getInteger(left) <= TemporaryValue::getInteger(right)};
+                {result = TemporaryValue::Bool{TemporaryValue::getInteger(left) <= TemporaryValue::getInteger(right)};return;}
             if(v.tokenValue.content == ">=")
-                return TemporaryValue::Bool{TemporaryValue::getInteger(left) >= TemporaryValue::getInteger(right)};
+                {result = TemporaryValue::Bool{TemporaryValue::getInteger(left) >= TemporaryValue::getInteger(right)};return;}
 
             if(v.tokenValue.content == "+")
-                return TemporaryValue::Integer{TemporaryValue::getInteger(left) + TemporaryValue::getInteger(right)};
+                {result = TemporaryValue::Integer{TemporaryValue::getInteger(left) + TemporaryValue::getInteger(right)};return;}
             if(v.tokenValue.content == "-")
-                return TemporaryValue::Integer{TemporaryValue::getInteger(left) - TemporaryValue::getInteger(right)};
+                {result = TemporaryValue::Integer{TemporaryValue::getInteger(left) - TemporaryValue::getInteger(right)};return;}
             if(v.tokenValue.content == "*")
-                return TemporaryValue::Integer{TemporaryValue::getInteger(left) * TemporaryValue::getInteger(right)};
+                {result = TemporaryValue::Integer{TemporaryValue::getInteger(left) * TemporaryValue::getInteger(right)};return;}
             if(v.tokenValue.content == "/")
-                return TemporaryValue::Integer{TemporaryValue::getInteger(left) / TemporaryValue::getInteger(right)};
+                {result = TemporaryValue::Integer{TemporaryValue::getInteger(left) / TemporaryValue::getInteger(right)};return;}
+            if(v.tokenValue.content == "%")
+                {result = TemporaryValue::Integer{TemporaryValue::getInteger(left) % TemporaryValue::getInteger(right)};return;}
 
             if(v.tokenValue.content == "^")
-                return TemporaryValue::Integer{static_cast<int>(
+                {result = TemporaryValue::Integer{static_cast<int>(
                     std::pow(TemporaryValue::getInteger(left),TemporaryValue::getInteger(right))
-                )};
+                )};return;}
         }
 
         if((left |vx::is<TemporaryValue::Integer> || left |vx::is<TemporaryValue::Float>) && (right |vx::is<TemporaryValue::Integer> || right |vx::is<TemporaryValue::Float>)) // If any argument is float, promote to float
         {
             if(v.tokenValue.content == "==")
-                return TemporaryValue::Bool{TemporaryValue::getFloat(left) == TemporaryValue::getFloat(right)};
+                {result = TemporaryValue::Bool{TemporaryValue::getFloat(left) == TemporaryValue::getFloat(right)};return;}
             if(v.tokenValue.content == "!=")
-                return TemporaryValue::Bool{TemporaryValue::getFloat(left) != TemporaryValue::getFloat(right)};
+                {result = TemporaryValue::Bool{TemporaryValue::getFloat(left) != TemporaryValue::getFloat(right)};return;}
             if(v.tokenValue.content == "<")
-                return TemporaryValue::Bool{TemporaryValue::getFloat(left) < TemporaryValue::getFloat(right)};
+                {result = TemporaryValue::Bool{TemporaryValue::getFloat(left) < TemporaryValue::getFloat(right)};return;}
             if(v.tokenValue.content == ">")
-                return TemporaryValue::Bool{TemporaryValue::getFloat(left) > TemporaryValue::getFloat(right)};
+                {result = TemporaryValue::Bool{TemporaryValue::getFloat(left) > TemporaryValue::getFloat(right)};return;}
             if(v.tokenValue.content == "<=")
-                return TemporaryValue::Bool{TemporaryValue::getFloat(left) <= TemporaryValue::getFloat(right)};
+                {result = TemporaryValue::Bool{TemporaryValue::getFloat(left) <= TemporaryValue::getFloat(right)};return;}
             if(v.tokenValue.content == ">=")
-                return TemporaryValue::Bool{TemporaryValue::getFloat(left) >= TemporaryValue::getFloat(right)};
+                {result = TemporaryValue::Bool{TemporaryValue::getFloat(left) >= TemporaryValue::getFloat(right)};return;}
 
 
             if(v.tokenValue.content == "+")
-                return TemporaryValue::Float{TemporaryValue::getFloat(left) + TemporaryValue::getFloat(right)};
+                {result = TemporaryValue::Float{TemporaryValue::getFloat(left) + TemporaryValue::getFloat(right)};return;}
             if(v.tokenValue.content == "-")
-                return TemporaryValue::Float{TemporaryValue::getFloat(left) - TemporaryValue::getFloat(right)};
+                {result = TemporaryValue::Float{TemporaryValue::getFloat(left) - TemporaryValue::getFloat(right)};return;}
             if(v.tokenValue.content == "*")
-                return TemporaryValue::Float{TemporaryValue::getFloat(left) * TemporaryValue::getFloat(right)};
+                {result = TemporaryValue::Float{TemporaryValue::getFloat(left) * TemporaryValue::getFloat(right)};return;}
             if(v.tokenValue.content == "/")
-                return TemporaryValue::Float{TemporaryValue::getFloat(left) / TemporaryValue::getFloat(right)};
+                {result = TemporaryValue::Float{TemporaryValue::getFloat(left) / TemporaryValue::getFloat(right)};return;}
 
             if(v.tokenValue.content == "^")
-                return TemporaryValue::Float{std::pow(TemporaryValue::getFloat(left),TemporaryValue::getFloat(right))};
+                {result = TemporaryValue::Float{std::pow(TemporaryValue::getFloat(left),TemporaryValue::getFloat(right))};return;}
         }
         if((left |vx::is<TemporaryValue::String> || right |vx::is<TemporaryValue::String>) )
         {
             if(v.tokenValue.content == "==")
-                return TemporaryValue::Bool{TemporaryValue::getString(left) == TemporaryValue::getString(right)};
+                {result = TemporaryValue::Bool{TemporaryValue::getString(left) == TemporaryValue::getString(right)};return;}
             if(v.tokenValue.content == "!=")
-                return TemporaryValue::Bool{TemporaryValue::getString(left) != TemporaryValue::getString(right)};
+                {result = TemporaryValue::Bool{TemporaryValue::getString(left) != TemporaryValue::getString(right)};return;}
 
             if(v.tokenValue.content == "+")
-                return TemporaryValue::String{TemporaryValue::getString(left) + TemporaryValue::getString(right)};
+                {result = TemporaryValue::String{TemporaryValue::getString(left) + TemporaryValue::getString(right)};return;}
         }
 
         std::cout << "unsupported operation:'" << v.tokenValue.content << "' between left:'" << left << "' and right:'" << right << "'\n";
@@ -201,159 +220,165 @@ TemporaryValue::Any treeWallInterpret(AstNode::Any& in,RuntimeScope* globalScope
         std::cout << "left: " << AstNode::stringify(*v.left) << '\n';
         std::cout << "right: " << AstNode::stringify(*v.right) << '\n';
         throw std::runtime_error("");
+
     }
-    else if (in |vx::is<AstNode::Block>)
+    void operator()(const AstNode::Block& v) override
     {
-        auto& v = in|vx::as<AstNode::Block>;
         if(preventNewScopeFromBlock)
         {
             if(v.statements.size() >= 1)
             {
                 for(int i = 0; i != v.statements.size()-1; i++)
                 {
-                    treeWallInterpret(*v.statements[i],globalScope,localScope);
+                    treeWallInterpret(v.statements[i],globalScope,localScope);
                 }
-                auto ret =  treeWallInterpret(*v.statements[v.statements.size()-1],globalScope,localScope);
-                return ret;
+                result =  treeWallInterpret(v.statements[v.statements.size()-1],globalScope,localScope);
+                return;
             }
         }
         else
         {
-            auto blockScope = std::make_unique<RuntimeScope>(localScope);
+            auto blockScope = RuntimeScope(localScope);
             if(v.statements.size() >= 1)
             {
                 for(int i = 0; i != v.statements.size()-1; i++)
                 {
-                    treeWallInterpret(*v.statements[i],globalScope,blockScope.get());
+                    treeWallInterpret(v.statements[i],globalScope,blockScope);
                 }
-                auto ret =  treeWallInterpret(*v.statements[v.statements.size()-1],globalScope,blockScope.get());
-                return ret;
+                result = treeWallInterpret(v.statements[v.statements.size()-1],globalScope,blockScope);
+                return;
             }
         }
     }
-    else if (in |vx::is<AstNode::PrintStmt>)
+    void operator()(const AstNode::PrintStmt& v) override
     {
-        auto& v = in|vx::as<AstNode::PrintStmt>;
-        auto inner = treeWallInterpret(*v.inner,globalScope,localScope);
-        inner |vx::match {
-            [&in](const TemporaryValue::Bool& v)       { std::cout << (v.value ? "true" : "false") ;},
-            [&in](const TemporaryValue::Integer& v)    { std::cout <<  v.value;},
-            [&in](const TemporaryValue::Float& v)      { std::cout <<  v.value;},
-            [&in](const TemporaryValue::String& v)
+        result = treeWallInterpret(v.inner,globalScope,localScope);
+        result |vx::match {
+            [](const TemporaryValue::Bool& v)       { std::cout << (v.value ? "true" : "false") ;},
+            [](const TemporaryValue::Integer& v)    { std::cout <<  v.value;},
+            [](const TemporaryValue::Float& v)      { std::cout <<  v.value;},
+            [](const TemporaryValue::String& v)
             {
                 std::cout <<  std::regex_replace(v.value, std::regex(R"(\\n)"), "\n");
             },
-            [&in](const TemporaryValue::Func& v)
+            [](const TemporaryValue::Func& v)
             {
                 std::cout << "<func>";
             }
         };
-        return inner;
+        return;
     }
-    else if (in |vx::is<AstNode::IfStmt>)
+    void operator()(const AstNode::IfStmt& v) override
     {
-        auto& v = in|vx::as<AstNode::IfStmt>;
-        auto when = treeWallInterpret(*v.when,globalScope,localScope);
+        auto when = treeWallInterpret(v.when,globalScope,localScope);
 
         if(TemporaryValue::getBool(when))
         {
-            auto blockScope = std::make_unique<RuntimeScope>(localScope);
-            auto ret = treeWallInterpret(*v.then,globalScope,blockScope.get(),true);
-            return ret;
+            auto blockScope = RuntimeScope(localScope);
+            result = treeWallInterpret(v.then,globalScope,blockScope,true);
+            return;
         }
         if(v.elseThen)
         {
             auto blockScope = std::make_unique<RuntimeScope>(localScope);
-            auto ret = treeWallInterpret(*v.elseThen,globalScope,localScope,true);
-            return ret;
+            result = treeWallInterpret(v.elseThen,globalScope,localScope,true);
+            return;
         }
-        return {};
     }
-
-    else if (in |vx::is<AstNode::AssignStmt>)
+    void operator()(const AstNode::AssignStmt& v) override
     {
-        auto& v = in|vx::as<AstNode::AssignStmt>;
-        auto varName = v.identifier.tokenValue.content;
-        auto value = treeWallInterpret(*v.value,globalScope,localScope);
+        auto asId = dynamic_cast<AstNode::Identifier*>(v.identifier.get());
+        if(!asId)
+        {
+            std::cout << v.tokenValue.source.printHint()  << "here \n";
+            throw std::runtime_error("");
+        }
+        auto varName = asId->tokenValue.content;
+        auto value = treeWallInterpret(v.value,globalScope,localScope);
 
-        if(auto var = localScope->getVariable(varName))
+        if(auto var = localScope.getVariable(varName))
         {
             if(var->index() == value.index())
             {
                 *var = std::move(value);
-                return value;
+                result = TemporaryValue::Any{*var};
+                return;
             }
 
             std::cout << "forbitted redefintion variable:'" << varName << "' old value:'" << *var << "' new value:'" << value << "'\n";
             std::cout << v.tokenValue.source.printHint()  << "here \n";
             throw std::runtime_error("");
         }
-        localScope->variables[varName] = std::move(value);
+        localScope.variables[varName] = std::move(value);
 
-        return value;
+        result = TemporaryValue::Any{localScope.variables[varName]};
     }
-    else if (in |vx::is<AstNode::WhileStmt>)
+    void operator()(const AstNode::WhileStmt& v) override
     {
-        auto& v = in|vx::as<AstNode::WhileStmt>;
-        auto blockScope = std::make_unique<RuntimeScope>(localScope);
+        auto blockScope = RuntimeScope(localScope);
 
-        TemporaryValue::Any ret = TemporaryValue::Bool{false};
+        result = TemporaryValue::Bool{false};
 
         for(int i = 0; i!= MAX_LOOP_ITERATION; i++) //max iteration
         {
-            auto until = treeWallInterpret(*v.until,globalScope,blockScope.get());
+            auto until = treeWallInterpret(v.until,globalScope,blockScope);
             if(TemporaryValue::getBool(until))
             {
-                ret = treeWallInterpret(*v.loop,globalScope,blockScope.get(),true);
+                result = treeWallInterpret(v.loop,globalScope,blockScope,true);
+                continue;
+            }
+            break;
+        }
+    }
+    void operator()(const AstNode::ForStmt& v) override
+    {
+        auto blockScope = RuntimeScope(localScope);
+
+        treeWallInterpret(v.doOnce,globalScope,blockScope,true);
+
+        result = TemporaryValue::Bool{false};
+
+        for(int i = 0; i!= MAX_LOOP_ITERATION; i++) //max iteration
+        {
+            auto until = treeWallInterpret(v.until,globalScope,blockScope);
+            if(TemporaryValue::getBool(until))
+            {
+                result = treeWallInterpret(v.loop,globalScope,blockScope,true);
+                treeWallInterpret(v.afterIter,globalScope,blockScope,true);
                 continue;
             }
             break;
         }
 
-        return ret;
     }
-    else if (in |vx::is<AstNode::ForStmt>)
+    void operator()(const AstNode::FunctionDecl& v) override
     {
-        auto& v = in|vx::as<AstNode::ForStmt>;
-        auto blockScope = std::make_unique<RuntimeScope>(localScope);
-
-        treeWallInterpret(*v.doOnce,globalScope,blockScope.get(),true);
-
-        TemporaryValue::Any ret = TemporaryValue::Bool{false};
-
-        for(int i = 0; i!= MAX_LOOP_ITERATION; i++) //max iteration
+        result = TemporaryValue::Func{v.copy()};
+    }
+    void operator()(const AstNode::FunctionCall& v) override
+    {
+        /*
+        auto asId = dynamic_cast<AstNode::Identifier*>(v.name.get());
+        if(!asId)
         {
-            auto until = treeWallInterpret(*v.until,globalScope,blockScope.get());
-            if(TemporaryValue::getBool(until))
-            {
-                ret = treeWallInterpret(*v.loop,globalScope,blockScope.get(),true);
-                treeWallInterpret(*v.afterIter,globalScope,blockScope.get(),true);
-                continue;
-            }
-            break;
+            std::cout << v.tokenValue.source.printHint()  << "here \n";
+            throw std::runtime_error("");
         }
-
-        return ret;
-    }
-    else if (in |vx::is<AstNode::FunctionCall>)
-    {
-        auto& v = in|vx::as<AstNode::FunctionCall>;
-
-        if(!localScope->getVariable(v.name.tokenValue.content))
+        if(!localScope.getVariable(asId->tokenValue.content))
         {
             std::cout << "Undefined function\n";
             std::cout << v.tokenValue.source.printHint()  << "here \n";
             throw std::runtime_error("");
         }
 
-        if(!((*localScope->getVariable(v.name.tokenValue.content))|vx::is<TemporaryValue::Func>))
+        if(!((*localScope.getVariable(v.name.tokenValue.content))|vx::is<TemporaryValue::Func>))
         {
             std::cout << "that is not a function\n";
             std::cout << v.tokenValue.source.printHint()  << "here \n";
             throw std::runtime_error("");
         }
 
-        auto& fn = (*localScope->getVariable(v.name.tokenValue.content))|vx::as<TemporaryValue::Func>;
+        auto& fn = (*localScope.getVariable(v.name.tokenValue.content))|vx::as<TemporaryValue::Func>;
 
 
 
@@ -363,7 +388,7 @@ TemporaryValue::Any treeWallInterpret(AstNode::Any& in,RuntimeScope* globalScope
             std::cout << v.tokenValue.source.printHint()  << "here \n";
             throw std::runtime_error("");
         }
-       auto fnScope = std::make_unique<RuntimeScope>(globalScope);
+        auto fnScope = std::make_unique<RuntimeScope>(globalScope);
         for(int i = 0; i!= v.params.size(); ++i)
         {
             fnScope->variables[fn.value.params[i].tokenValue.content] = treeWallInterpret(v.params[i],globalScope,localScope);
@@ -377,25 +402,21 @@ TemporaryValue::Any treeWallInterpret(AstNode::Any& in,RuntimeScope* globalScope
         catch(FuncReturn& ret)
         {
             return std::move(ret.result);
-        }
+        }*/
     }
-    else if (in |vx::is<AstNode::Return>)
+    void operator()(const AstNode::Return& v) override
     {
-        auto& v = in|vx::as<AstNode::Return>;
+        throw FuncReturn{treeWallInterpret(v.inner,globalScope,localScope)};
+    }
+};
 
-        throw FuncReturn{treeWallInterpret(*v.inner,globalScope,localScope)};
-    }
+
+TemporaryValue::Any treeWallInterpret(const AstNode::OwnedNode& in,RuntimeScope& globalScope,RuntimeScope& localScope,bool preventNewScopeFromBlock)
+{
+    TemporaryValue::Any result;
+    in->accept(InterpreterVisitor(result,globalScope,localScope,preventNewScopeFromBlock));
+    return result;
+
     std::cout << "unable to execute '" << in << "'\n";
-    std::visit([](auto& v)
-    {
-        if constexpr (hasTokenValue<decltype(v)>)
-        {
-            std::cout << v.tokenValue.source.printHint()  << "here \n";
-        }
-        else
-        {
-            std::cout << "couldn't find tokenValue \n";
-        }
-    },in);
     throw std::runtime_error("interpreting error");
 }

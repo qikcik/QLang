@@ -16,7 +16,7 @@
 
 int main()
 {
-    auto rootScope = std::make_unique<RuntimeScope>(nullptr);
+    auto rootScope = RuntimeScope(nullptr);
 
     while(true)
     {
@@ -43,7 +43,7 @@ int main()
 
         try
         {
-            LexScanner scanner(source,{"+","-","*","^","/","(",")","==","!=","<",">","<=",">=","!","&&","||","{","}",":=",",","fn"});
+            LexScanner scanner(source,{"+","-","*","^","/","%","(",")","==","!=","<",">","<=",">=","!","&&","||","{","}",":=",",","fn"});
 
             std::cout << "TOKEKNS: \n";
             while ( scanner.current())
@@ -60,7 +60,7 @@ int main()
             std::cout << "\nINTERPRET: \n";
 
 
-            treeWallInterpret(*root,rootScope.get(),rootScope.get(),true);
+            treeWallInterpret(root,rootScope,rootScope,true);
 
             std::cout << "\n";
         }

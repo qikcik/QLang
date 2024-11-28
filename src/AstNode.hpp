@@ -2,6 +2,7 @@
 
 #include <array>
 #include <memory>
+#include <regex>
 #include <string>
 
 #include "LexToken.hpp"
@@ -9,214 +10,290 @@
 
 namespace AstNode
 {
+    struct Base;
     struct Identifier;
     struct Integer; struct Float; struct String; struct Bool;
     struct UnaryOp; struct BinaryOp;
     struct Block; struct PrintStmt; struct IfStmt; struct AssignStmt; struct WhileStmt; struct ForStmt; struct FunctionDecl; struct FunctionCall; struct Return;
 
-    using Any = std::variant<Identifier,Integer,Float,String,Bool,UnaryOp,BinaryOp,Block,PrintStmt,IfStmt,AssignStmt,WhileStmt,ForStmt, FunctionDecl,FunctionCall,Return>;
+    using OwnedNode = std::unique_ptr<Base>;
+
+
+    struct IVisitor
+    {
+        virtual ~IVisitor() = default;
+        virtual void operator()(const Identifier&) =0;
+        virtual void operator()(const Integer&) =0;
+        virtual void operator()(const Float&) =0;
+        virtual void operator()(const String&) =0;
+        virtual void operator()(const Bool&) =0;
+        virtual void operator()(const UnaryOp&) =0;
+        virtual void operator()(const BinaryOp&) =0;
+        virtual void operator()(const Block&) =0;
+        virtual void operator()(const PrintStmt&) =0;
+        virtual void operator()(const IfStmt&) =0;
+        virtual void operator()(const AssignStmt&) =0;
+        virtual void operator()(const WhileStmt&) =0;
+        virtual void operator()(const ForStmt&) =0;
+        virtual void operator()(const FunctionDecl&) =0;
+        virtual void operator()(const FunctionCall&) =0;
+        virtual void operator()(const Return&) =0;
+    };
 
     struct Base
     {
+        Base() = default;
         virtual ~Base() = default;
-        virtual Any copy() const = 0;
+
+        virtual OwnedNode copy() const = 0;
+        virtual void accept(IVisitor&& visitor) const = 0;
     };
 
-    struct Identifier final : public Base
+    template <typename TDerivered>
+    struct BaseImpl : public Base
     {
-        explicit Identifier(const LexToken::Label& inValue) : tokenValue(inValue) {};
+        BaseImpl(): Base() {} ;
+        ~BaseImpl() override = default;
+
+        void accept(IVisitor&& visitor) const override
+        {
+            visitor.operator()(static_cast<const TDerivered&>(*this));
+        }
+    };
+
+    struct Identifier final : public BaseImpl<Identifier>
+    {
+        explicit Identifier(const LexToken::Label& inValue) : BaseImpl<Identifier>(), tokenValue(inValue)
+        {
+        };
         LexToken::Label tokenValue;
 
-        Any copy() const override;
+        OwnedNode copy() const override;
     };
 
-    struct Integer : public Base
+    struct Integer : public BaseImpl<Integer>
     {
-        explicit Integer(const LexToken::Integer& inValue) : tokenValue(inValue) {};
+        explicit Integer(const LexToken::Integer& inValue) : BaseImpl<Integer>(), tokenValue(inValue)
+        {
+        };
         LexToken::Integer tokenValue;
 
-        Any copy() const override;;
+        OwnedNode copy() const override;;
     };
 
-    struct Float final : public Base
+    struct Float final : public BaseImpl<Float>
     {
-        explicit Float(const LexToken::Float& inValue) : tokenValue(inValue) {};
+        explicit Float(const LexToken::Float& inValue) : BaseImpl<Float>(), tokenValue(inValue)
+        {
+        };
         LexToken::Float tokenValue;
 
-        Any copy() const override;;
+        OwnedNode copy() const override;
     };
 
-    struct Bool final : public Base
+    struct Bool final : public BaseImpl<Bool>
     {
-        explicit Bool(const LexToken::Label& inValue) : tokenValue(inValue) {};
+        explicit Bool(const LexToken::Label& inValue) : BaseImpl<Bool>(), tokenValue(inValue)
+        {
+        };
         LexToken::Label tokenValue;
 
-        Any copy() const override;
+        OwnedNode copy() const override;
     };
 
-    struct String final : public Base
+    struct String final : public BaseImpl<String>
     {
-        explicit String(const LexToken::String& inValue) : tokenValue(inValue) {};
+        explicit String(const LexToken::String& inValue) : BaseImpl<String>(), tokenValue(inValue)
+        {
+        };
         LexToken::String tokenValue;
 
-        Any copy() const override;
+        OwnedNode copy() const override;
     };
 
-    struct UnaryOp final : public Base
+    struct UnaryOp final : public BaseImpl<UnaryOp>
     {
-        UnaryOp(const LexToken::Separator& inOp,std::unique_ptr<AstNode::Any> inInner) : tokenValue(inOp), inner(std::move(inInner)) {};
+        UnaryOp(const LexToken::Separator& inOp,OwnedNode inInner) : BaseImpl<UnaryOp>(),
+            tokenValue(inOp), inner(std::move(inInner))
+        {
+        };
         LexToken::Separator tokenValue;
-        std::unique_ptr<AstNode::Any> inner;
+        OwnedNode inner;
 
-        Any copy() const override;
+        OwnedNode copy() const override;
 
     };
 
-    struct BinaryOp final : public Base
+    struct BinaryOp final : public BaseImpl<BinaryOp>
     {
-        BinaryOp(const LexToken::Separator& inOp, std::unique_ptr<AstNode::Any>  inLeft, std::unique_ptr<AstNode::Any>  inRight) : tokenValue(inOp), left(std::move(inLeft)), right(std::move(inRight)) {};
+        BinaryOp(const LexToken::Separator& inOp, OwnedNode inLeft, OwnedNode inRight) :
+            BaseImpl<BinaryOp>(), tokenValue(inOp), left(std::move(inLeft)), right(std::move(inRight))
+        {
+        };
         LexToken::Separator tokenValue;
-        std::unique_ptr<AstNode::Any> left;
-        std::unique_ptr<AstNode::Any> right;
+        OwnedNode left;
+        OwnedNode right;
 
-        Any copy() const override;
+        OwnedNode copy() const override;
     };
 
-    struct Block final : public Base
+    struct Block final : public BaseImpl<Block>
     {
-        explicit Block(std::vector<std::unique_ptr<AstNode::Any>> inStatements) : statements(std::move(inStatements)) {}
-        std::vector<std::unique_ptr<AstNode::Any>> statements;
+        explicit Block(std::vector<OwnedNode> inStatements) : BaseImpl<Block>(),
+            statements(std::move(inStatements))
+        {
+        }
 
-        Any copy() const override;
+        std::vector<OwnedNode> statements;
+
+        OwnedNode copy() const override;
     };
 
-    struct PrintStmt final : public Base
+    struct PrintStmt final : public BaseImpl<PrintStmt>
     {
-        PrintStmt(const LexToken::Label& inOp,std::unique_ptr<AstNode::Any> inInner) : tokenValue(inOp), inner(std::move(inInner)) {};
+        PrintStmt(const LexToken::Label& inOp,OwnedNode inInner) : BaseImpl<PrintStmt>(),
+            tokenValue(inOp), inner(std::move(inInner))
+        {
+        };
         LexToken::Label tokenValue;
-        std::unique_ptr<AstNode::Any> inner;
+        OwnedNode inner;
 
-        Any copy() const override;
+        OwnedNode copy() const override;
     };
 
-    struct IfStmt final : public Base
+    struct IfStmt final : public BaseImpl<IfStmt>
     {
         IfStmt(const LexToken::Label& inOp,
-                std::unique_ptr<AstNode::Any> when,
-                std::unique_ptr<AstNode::Any> then,
-                std::unique_ptr<AstNode::Any> elseThen)
-        : tokenValue(inOp),
-            when(std::move(when)),
-            then(std::move(then)),
-            elseThen(std::move(elseThen)) {};
+                OwnedNode when,
+                OwnedNode then,
+                OwnedNode elseThen)
+            : BaseImpl<IfStmt>(), tokenValue(inOp),
+              when(std::move(when)),
+              then(std::move(then)),
+              elseThen(std::move(elseThen))
+        {
+        };
 
         LexToken::Label tokenValue;
-        std::unique_ptr<AstNode::Any> when;
-        std::unique_ptr<AstNode::Any> then;
-        std::unique_ptr<AstNode::Any> elseThen;
+        OwnedNode when;
+        OwnedNode then;
+        OwnedNode elseThen;
 
-        Any copy() const override;
+        OwnedNode copy() const override;
     };
 
-    struct AssignStmt final : public Base
+    struct AssignStmt final : public BaseImpl<AssignStmt>
     {
         AssignStmt(const LexToken::Separator& inOp,
-                AstNode::Identifier inIdentifier,
-                std::unique_ptr<AstNode::Any> inValue)
-        : tokenValue(inOp),
-            identifier(std::move(inIdentifier)),
-            value(std::move(inValue)) {};
+                OwnedNode inIdentifier,
+                OwnedNode inValue)
+            : BaseImpl<AssignStmt>(), tokenValue(inOp),
+              identifier(std::move(inIdentifier)),
+              value(std::move(inValue))
+        {
+        };
 
         LexToken::Separator tokenValue;
-        AstNode::Identifier identifier;
-        std::unique_ptr<AstNode::Any> value;
+        OwnedNode identifier;
+        OwnedNode value;
 
-        Any copy() const override;
+        OwnedNode copy() const override;
     };
 
-    struct WhileStmt final : public Base
+    struct WhileStmt final : public BaseImpl<WhileStmt>
     {
         WhileStmt(const LexToken::Label& inOp,
-                std::unique_ptr<AstNode::Any> until,
-                std::unique_ptr<AstNode::Any> loop)
-        : tokenValue(inOp),
-            until(std::move(until)),
-            loop(std::move(loop)) {};
+                OwnedNode until,
+                OwnedNode loop)
+            : BaseImpl<WhileStmt>(), tokenValue(inOp),
+              until(std::move(until)),
+              loop(std::move(loop))
+        {
+        };
 
         LexToken::Label tokenValue;
-        std::unique_ptr<AstNode::Any> until;
-        std::unique_ptr<AstNode::Any> loop;
+        OwnedNode until;
+        OwnedNode loop;
 
-        Any copy() const override;
+        OwnedNode copy() const override;
     };
 
-    struct ForStmt final : public Base
+    struct ForStmt final : public BaseImpl<ForStmt>
     {
         ForStmt(const LexToken::Label& inOp,
-                std::unique_ptr<AstNode::Any> doOnce,
-                std::unique_ptr<AstNode::Any> until,
-                std::unique_ptr<AstNode::Any> afterIter,
-                std::unique_ptr<AstNode::Any> loop)
-        : tokenValue(inOp),
-            doOnce(std::move(doOnce)),
-            until(std::move(until)),
-            afterIter(std::move(afterIter)),
-            loop(std::move(loop)){};
+                OwnedNode doOnce,
+                OwnedNode until,
+                OwnedNode afterIter,
+                OwnedNode loop)
+            : BaseImpl<ForStmt>(), tokenValue(inOp),
+              doOnce(std::move(doOnce)),
+              until(std::move(until)),
+              afterIter(std::move(afterIter)),
+              loop(std::move(loop))
+        {
+        };
 
         LexToken::Label tokenValue;
-        std::unique_ptr<AstNode::Any> doOnce;
-        std::unique_ptr<AstNode::Any> until;
-        std::unique_ptr<AstNode::Any> afterIter;
-        std::unique_ptr<AstNode::Any> loop;
+        OwnedNode doOnce;
+        OwnedNode until;
+        OwnedNode afterIter;
+        OwnedNode loop;
 
-        Any copy() const override;
+        OwnedNode copy() const override;
     };
 
-    struct FunctionDecl final : public Base
+    struct FunctionDecl final : public BaseImpl<FunctionDecl>
     {
         FunctionDecl(const LexToken::Separator& inOp,
-                std::vector<AstNode::Identifier> params,
-                std::unique_ptr<AstNode::Any> body)
-        : tokenValue(inOp),
-            params(std::move(params)),
-            body(std::move(body)){};
+                std::vector<AstNode::OwnedNode> params,
+                OwnedNode body)
+            : BaseImpl<FunctionDecl>(), tokenValue(inOp),
+              params(std::move(params)),
+              body(std::move(body))
+        {
+        };
 
         LexToken::Separator tokenValue;
-        std::vector<AstNode::Identifier> params;
-        std::unique_ptr<AstNode::Any> body;
+        std::vector<AstNode::OwnedNode> params;
+        OwnedNode body;
 
-        Any copy() const override;
+        OwnedNode copy() const override;
     };
 
-    struct FunctionCall final : public Base
+    struct FunctionCall final : public BaseImpl<FunctionCall>
     {
         FunctionCall(const LexToken::Separator& inOp,
-                AstNode::Identifier name,
-                std::vector<AstNode::Any> params)
-        : tokenValue(inOp), params(std::move(params)), name(std::move(name)){};
+                OwnedNode name,
+                std::vector<OwnedNode> args)
+            : BaseImpl<FunctionCall>(), tokenValue(inOp), args(std::move(args)), name(std::move(name))
+        {
+        };
 
         LexToken::Separator tokenValue;
-        AstNode::Identifier name;
-        std::vector<AstNode::Any> params;
+        OwnedNode name;
+        std::vector<OwnedNode> args;
 
-        Any copy() const override;
+        OwnedNode copy() const override;
     };
 
-    struct Return final : public Base
+    struct Return final : public BaseImpl<Return>
     {
-        Return(const LexToken::Label& inOp,std::unique_ptr<AstNode::Any> inInner) : tokenValue(inOp), inner(std::move(inInner)) {};
+        Return(const LexToken::Label& inOp,OwnedNode inInner) : BaseImpl<Return>(),
+            tokenValue(inOp), inner(std::move(inInner))
+        {
+        };
         LexToken::Label tokenValue;
-        std::unique_ptr<AstNode::Any> inner;
+        OwnedNode inner;
 
-        Any copy() const override;
+        OwnedNode copy() const override;
 
     };
 
-    std::string stringify(const AstNode::Any& in, int intend = 0);
+    std::string stringify(const Base& in, int intend = 0);
 }
 
 
-inline std::ostream& operator<<(std::ostream& os, const AstNode::Any& in)
+inline std::ostream& operator<<(std::ostream& os, const AstNode::Base& in)
 {
     return os << AstNode::stringify(in, 0);
 }

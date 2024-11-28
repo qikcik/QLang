@@ -12,7 +12,7 @@ std::ostream& operator<<(std::ostream& os, const TemporaryValue::Any& in)
         [&os,&in](const TemporaryValue::Integer& v)    { os << "TemporaryValue::Integer{" << v.value << "}";},
         [&os,&in](const TemporaryValue::Float& v)      { os << "TemporaryValue::Float{" << v.value << "}";},
         [&os,&in](const TemporaryValue::String& v)     { os << "TemporaryValue::String{" << v.value << "}";},
-        [&os,&in](const TemporaryValue::Func& v)       { os << "TemporaryValue::Func{" << v.value.params.size() << "}";}
+        [&os,&in](const TemporaryValue::Func& v)       { os << "TemporaryValue::Func{" << v.value << "}";}
     };
     return os;
 }

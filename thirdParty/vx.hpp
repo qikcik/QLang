@@ -8,8 +8,11 @@
 #include <tuple>
 #include <any>
 
-namespace vx {
+template<class... Ts> struct overload : Ts... { using Ts::operator()...; };
+template<class... Ts> overload(Ts...) -> overload<Ts...>;
 
+
+namespace vx {
 // ===== [ try_find ] =====
 namespace detail {
     template <typename X, typename... Ts>
